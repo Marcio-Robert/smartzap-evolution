@@ -1,0 +1,5 @@
+{
+  "name": "SmartZapv2",
+  "description": "A professional SaaS platform for managing and sending bulk WhatsApp campaigns using the official Business API. Features campaign wizards, contact management, and real-time analytics.",
+  "requestFramePermissions": []
+}

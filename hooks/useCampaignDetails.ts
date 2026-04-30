@@ -1,0 +1,199 @@
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate } from '@/lib/navigation';
+import { toast } from 'sonner';
+import { campaignService } from '../services';
+import { useCampaignRealtime } from './useCampaignRealtime';
+import { CampaignStatus, MessageStatus, Message } from '../types';
+
+// Polling interval as backup while Realtime is connected (60 seconds)
+const BACKUP_POLLING_INTERVAL = 60 * 1000;
+
+export const useCampaignDetailsController = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch campaign data
+  const campaignQuery = useQuery({
+    queryKey: ['campaign', id],
+    queryFn: () => campaignService.getById(id!),
+    enabled: !!id && !id.startsWith('temp_'),
+    staleTime: 5000,
+  });
+
+  const campaign = campaignQuery.data;
+
+  // Real-time updates via Supabase Realtime with smart debounce
+  const { isConnected: isRealtimeConnected, shouldShowRefreshButton } = useCampaignRealtime({
+    campaignId: id,
+    status: campaign?.status,
+    recipients: campaign?.recipients || 0,
+    completedAt: campaign?.completedAt,
+  });
+
+  // Polling logic:
+  // - Small campaigns with Realtime: 60s backup polling
+  // - Large campaigns (>= 10k) without Realtime: 60s primary polling
+  const isActiveCampaign = campaign?.status === CampaignStatus.SENDING ||
+    campaign?.status === CampaignStatus.SCHEDULED ||
+    campaign?.status === CampaignStatus.COMPLETED;
+
+  const isLargeCampaign = (campaign?.recipients || 0) >= 10000;
+
+  // Poll if: (connected as backup) OR (large campaign needs polling as primary)
+  const shouldPoll = isActiveCampaign && (isRealtimeConnected || isLargeCampaign);
+
+  // Fetch messages with optional polling
+  const messagesQuery = useQuery({
+    queryKey: ['campaignMessages', id],
+    queryFn: () => campaignService.getMessages(id!),
+    enabled: !!id,
+    staleTime: 5000,
+    // Backup polling only while connected and active
+    refetchInterval: shouldPoll ? BACKUP_POLLING_INTERVAL : false,
+  });
+
+  // Add polling to campaign query too
+  const campaignWithPolling = useQuery({
+    queryKey: ['campaign', id],
+    queryFn: () => campaignService.getById(id!),
+    enabled: !!id && !id.startsWith('temp_'),
+    staleTime: 5000,
+    refetchInterval: shouldPoll ? BACKUP_POLLING_INTERVAL : false,
+  });
+
+  // Use the campaign data (prefer the polling-enabled query)
+  const activeCampaign = campaignWithPolling.data || campaign;
+
+  // Extract messages from paginated response
+  const messages: Message[] = useMemo(() => {
+    const data = messagesQuery.data;
+    if (!data) return [];
+    return data.messages || [];
+  }, [messagesQuery.data]);
+
+  // Manual refresh function
+  const refetch = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        campaignQuery.refetch(),
+        messagesQuery.refetch(),
+      ]);
+      toast.success('Dados atualizados');
+    } catch {
+      toast.error('Erro ao atualizar dados');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Pause mutation
+  const pauseMutation = useMutation({
+    mutationFn: () => campaignService.pause(id!),
+    onSuccess: () => {
+      toast.success('Campanha pausada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['campaign', id] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: () => {
+      toast.error('Erro ao pausar campanha');
+    }
+  });
+
+  // Resume mutation
+  const resumeMutation = useMutation({
+    mutationFn: () => campaignService.resume(id!),
+    onSuccess: () => {
+      toast.success('Campanha retomada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['campaign', id] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: () => {
+      toast.error('Erro ao retomar campanha');
+    }
+  });
+
+  // Start mutation (for scheduled campaigns)
+  const startMutation = useMutation({
+    mutationFn: () => campaignService.start(id!),
+    onSuccess: () => {
+      toast.success('Campanha iniciada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['campaign', id] });
+      queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+    },
+    onError: () => {
+      toast.error('Erro ao iniciar campanha');
+    }
+  });
+
+  const filteredMessages = useMemo(() => {
+    if (!messages) return [];
+    return messages.filter(m =>
+      m.contactName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.contactPhone.includes(searchTerm)
+    );
+  }, [messages, searchTerm]);
+
+  // Calculate real stats from messages (fallback if campaign stats not available)
+  const realStats = useMemo(() => {
+    if (!messages || messages.length === 0) return null;
+    const sent = messages.filter(m => m.status === MessageStatus.SENT || m.status === MessageStatus.DELIVERED || m.status === MessageStatus.READ).length;
+    const failed = messages.filter(m => m.status === MessageStatus.FAILED).length;
+    const delivered = messages.filter(m => m.status === MessageStatus.DELIVERED || m.status === MessageStatus.READ).length;
+    const read = messages.filter(m => m.status === MessageStatus.READ).length;
+    return { sent, failed, delivered, read, total: messages.length };
+  }, [messages]);
+
+  // Actions
+  const handlePause = () => {
+    if (activeCampaign?.status === CampaignStatus.SENDING) {
+      pauseMutation.mutate();
+    }
+  };
+
+  const handleResume = () => {
+    if (activeCampaign?.status === CampaignStatus.PAUSED) {
+      resumeMutation.mutate();
+    }
+  };
+
+  const handleStart = () => {
+    if (activeCampaign?.status === CampaignStatus.SCHEDULED || activeCampaign?.status === CampaignStatus.DRAFT) {
+      startMutation.mutate();
+    }
+  };
+
+  // Can perform actions?
+  const canPause = activeCampaign?.status === CampaignStatus.SENDING;
+  const canResume = activeCampaign?.status === CampaignStatus.PAUSED;
+  const canStart = activeCampaign?.status === CampaignStatus.SCHEDULED || activeCampaign?.status === CampaignStatus.DRAFT;
+
+  return {
+    campaign: activeCampaign,
+    messages: filteredMessages,
+    isLoading: campaignQuery.isLoading || messagesQuery.isLoading,
+    searchTerm,
+    setSearchTerm,
+    navigate,
+    realStats,
+    // Realtime status
+    isRealtimeConnected,
+    shouldShowRefreshButton,
+    isRefreshing,
+    refetch,
+    // Actions
+    onPause: handlePause,
+    onResume: handleResume,
+    onStart: handleStart,
+    isPausing: pauseMutation.isPending,
+    isResuming: resumeMutation.isPending,
+    isStarting: startMutation.isPending,
+    canPause,
+    canResume,
+    canStart,
+  };
+};

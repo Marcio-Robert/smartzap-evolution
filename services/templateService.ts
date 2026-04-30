@@ -1,0 +1,279 @@
+import { Template, TemplateStatus } from '../types';
+
+export class TemplateServiceError extends Error {
+  constructor(message: string, public code: 'NOT_CONFIGURED' | 'FETCH_FAILED') {
+    super(message);
+    this.name = 'TemplateServiceError';
+  }
+}
+
+// Tipos para geração em massa (simplificado)
+export type UtilityCategory =
+  | 'order_confirmation'
+  | 'shipping_update'
+  | 'delivery_notification'
+  | 'payment_reminder'
+  | 'appointment_reminder'
+  | 'account_update'
+  | 'ticket_status'
+  | 'subscription_update'
+  | 'feedback_request'
+  | 'verification_code'
+  | 'password_reset'
+  | 'security_alert'
+  | 'reservation_confirmation'
+  | 'service_completion'
+  | 'document_ready';
+
+export interface GeneratedTemplateButton {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  text: string;
+  url?: string;
+  phone_number?: string;
+}
+
+export interface GeneratedTemplateHeader {
+  format: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  text?: string;
+}
+
+export interface GeneratedTemplateFooter {
+  text: string;
+}
+
+export interface GeneratedTemplate {
+  id: string;
+  name: string;
+  category: string;
+  content: string;
+  variables: string[];
+  description: string;
+  language: string;
+  status: 'DRAFT';
+  // Optional generated fields
+  header?: GeneratedTemplateHeader;
+  footer?: GeneratedTemplateFooter;
+  buttons?: GeneratedTemplateButton[];
+  // AI Agent fields
+  judgment?: {
+    approved: boolean;
+    issues: Array<{ reason: string; fix?: string }>;
+    originalScore: number;
+  };
+  wasFixed?: boolean;
+}
+
+// Simplificado: só precisa do prompt, quantidade e idioma
+export interface GenerateUtilityParams {
+  prompt: string;
+  quantity?: number;
+  language?: 'pt_BR' | 'en_US' | 'es_ES';
+}
+
+export interface GenerateUtilityResponse {
+  templates: GeneratedTemplate[];
+  metadata: {
+    prompt: string;
+    quantity: number;
+    language: string;
+    suggestedTitle?: string;
+  };
+}
+
+export const templateService = {
+  getAll: async (): Promise<Template[]> => {
+    // Call API directly - server will get credentials from Redis
+    const response = await fetch('/api/templates', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new TemplateServiceError(
+        errorData.error || 'Falha ao buscar templates da Meta',
+        response.status === 401 ? 'NOT_CONFIGURED' : 'FETCH_FAILED'
+      );
+    }
+
+    return response.json();
+  },
+
+  sync: async (): Promise<number> => {
+    // Since getAll now fetches from Meta, sync is just a re-fetch
+    // But to return the count of *new* templates, we'd need comparison logic.
+    // For now, let's just return the total count.
+    const templates = await templateService.getAll();
+    return templates.length;
+  },
+
+  // Note: Templates are created in Meta Business Manager and synced via getAll()
+  // This method is kept for future local draft functionality
+  add: async (template: Omit<Template, 'id' | 'status' | 'lastUpdated' | 'preview'>): Promise<Template> => {
+    // For now, throw an error since templates should be created in Meta
+    throw new Error('Templates devem ser criados no Meta Business Manager');
+  },
+
+  generateAiContent: async (prompt: string): Promise<string> => {
+    const response = await fetch('/api/ai/generate-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    if (!response.ok) throw new Error('Failed to generate AI content');
+    const data = await response.json();
+    return data.content;
+  },
+
+  generateUtilityTemplates: async (params: GenerateUtilityParams): Promise<GenerateUtilityResponse> => {
+    const response = await fetch('/api/ai/generate-utility-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: params.prompt,
+        quantity: params.quantity || 5,
+        language: params.language || 'pt_BR'
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Falha ao gerar templates');
+    }
+
+    return response.json();
+  },
+
+  // Criar template diretamente na Meta via API
+  createInMeta: async (template: { name: string; content: string; language?: string }): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch('/api/templates/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: template.name,
+        content: template.content,
+        language: template.language || 'pt_BR',
+        category: 'UTILITY'
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha ao criar template na Meta');
+    }
+
+    return { success: true, message: data.message };
+  },
+
+  // Criar múltiplos templates na Meta via API
+  createBulkInMeta: async (templates: Array<{
+    name: string;
+    content: string;
+    language?: string;
+    category?: string;
+    exampleVariables?: string[];
+    header?: { format: string; text?: string };
+    footer?: { text: string };
+    buttons?: Array<{ type: string; text?: string; url?: string; phone_number?: string }>;
+  }>): Promise<{
+    total: number;
+    created: number;
+    failed: number;
+    success: string[];
+    errors: Array<{ name: string; error: string }>;
+  }> => {
+    const response = await fetch('/api/templates/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templates })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha ao criar templates na Meta');
+    }
+
+    return data;
+  },
+
+  // Exportar template para formato Meta (para copiar/colar no Business Manager) - mantido como fallback
+  exportForMeta: (template: GeneratedTemplate): string => {
+    return JSON.stringify({
+      name: template.name,
+      language: template.language,
+      category: 'UTILITY',
+      components: [
+        {
+          type: 'BODY',
+          text: template.content,
+          example: {
+            body_text: [template.variables.map((_, i) => `Exemplo ${i + 1}`)]
+          }
+        }
+      ]
+    }, null, 2);
+  },
+
+  // Buscar detalhes de um template específico
+  getByName: async (name: string): Promise<Template & {
+    header?: string | null;
+    footer?: string | null;
+    buttons?: Array<{ type: string; text: string; url?: string }>;
+    qualityScore?: string | null;
+    rejectedReason?: string | null;
+  }> => {
+    const response = await fetch(`/api/templates/${encodeURIComponent(name)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Falha ao buscar template');
+    }
+
+    return response.json();
+  },
+
+  // Deletar template da Meta
+  delete: async (name: string): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(`/api/templates/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha ao deletar template');
+    }
+
+    return data;
+  },
+
+  // Deletar múltiplos templates da Meta
+  deleteBulk: async (names: string[]): Promise<{
+    total: number;
+    deleted: number;
+    failed: number;
+    success: string[];
+    errors: Array<{ name: string; error: string }>;
+  }> => {
+    const response = await fetch('/api/templates/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Falha ao deletar templates');
+    }
+
+    return data;
+  }
+};
