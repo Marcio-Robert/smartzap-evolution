@@ -30,24 +30,24 @@ export async function proxy(request: NextRequest) {
     // ==========================================================================
     // BOOTSTRAP CHECK - Redirect to setup if not configured
     // ==========================================================================
-    const hasMasterPassword = !!process.env.MASTER_PASSWORD
-    const isSetupComplete = !!process.env.SETUP_COMPLETE
+    // const hasMasterPassword = !!process.env.MASTER_PASSWORD
+    // const isSetupComplete = !!process.env.SETUP_COMPLETE
 
     // If not configured and not already on setup, redirect immediately
-    if (!hasMasterPassword) {
-        if (!pathname.startsWith('/setup') && !pathname.startsWith('/api')) {
-            const setupUrl = new URL('/setup/start', request.url)
-            return NextResponse.redirect(setupUrl)
-        }
-    }
+    // if (!hasMasterPassword) {
+    //     if (!pathname.startsWith('/setup') && !pathname.startsWith('/api')) {
+    //         const setupUrl = new URL('/setup/start', request.url)
+    //         return NextResponse.redirect(setupUrl)
+    //     }
+    // }
 
     // If configured but setup not complete (company info missing), go to wizard
-    if (hasMasterPassword && !isSetupComplete) {
-        if (!pathname.startsWith('/setup') && !pathname.startsWith('/api') && !pathname.startsWith('/debug')) {
-            const wizardUrl = new URL('/setup/wizard?resume=true', request.url)
-            return NextResponse.redirect(wizardUrl)
-        }
-    }
+    // if (hasMasterPassword && !isSetupComplete) {
+    //     if (!pathname.startsWith('/setup') && !pathname.startsWith('/api') && !pathname.startsWith('/debug')) {
+    //         const wizardUrl = new URL('/setup/wizard?resume=true', request.url)
+    //         return NextResponse.redirect(wizardUrl)
+    //     }
+    // }
 
     // If configured and on OLD bootstrap setup, redirect to login or new start?
     // Actually, if configured, we might want to allow /setup/start if user WANTS to fix envs.
