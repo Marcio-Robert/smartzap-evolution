@@ -9,19 +9,26 @@ interface RouteContext {
   params: Promise<{ phoneNumberId: string }>;
 }
 
-// Get verify token from Redis (same logic as webhook endpoint)
+import { settingsDb } from '@/lib/supabase-db';
+
+// Get verify token (Env var preferred, then Supabase settings)
 async function getVerifyToken(): Promise<string> {
-  if (isRedisAvailable() && redis) {
-    const storedToken = await redis.get('webhook:verify_token');
-    if (storedToken) {
-      return storedToken as string;
-    }
-    // Generate new UUID token and store in Redis
-    const newToken = crypto.randomUUID();
-    await redis.set('webhook:verify_token', newToken);
-    return newToken;
+  if (process.env.WEBHOOK_VERIFY_TOKEN) {
+    return process.env.WEBHOOK_VERIFY_TOKEN.trim();
   }
-  return process.env.WEBHOOK_VERIFY_TOKEN || 'smartzap_verify_token';
+  
+  try {
+    const storedToken = await settingsDb.get('webhook_verify_token');
+    if (storedToken) {
+      return storedToken;
+    }
+    // Generate new UUID token and store in Supabase
+    const newToken = crypto.randomUUID();
+    await settingsDb.set('webhook_verify_token', newToken);
+    return newToken;
+  } catch {
+    return 'smartzap_verify_token';
+  }
 }
 
 /**
