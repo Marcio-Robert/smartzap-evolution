@@ -34,16 +34,16 @@ function LoginForm() {
         if (!data.isConfigured) {
           console.log('🔍 [LOGIN] Not configured, redirecting to /setup/start')
           // No MASTER_PASSWORD = needs setup wizard
-          router.push('/setup/start')
+          // router.push('/setup/start')  <-- COMENTE APENAS AQUI
         } else if (!data.isSetup) {
           console.log('🔍 [LOGIN] Not setup, redirecting to /setup/wizard?resume=true')
-          router.push('/setup/wizard?resume=true')
+          // router.push('/setup/wizard?resume=true') <-- COMENTE APENAS AQUI
         } else if (data.isAuthenticated) {
           console.log('🔍 [LOGIN] Already authenticated, redirecting to /')
-          router.push('/')
+          router.push('/') // MANTENHA ESTE (se logado, vai pro CRM)
         } else if (data.company) {
           console.log('🔍 [LOGIN] Company found:', data.company.name)
-          setCompanyName(data.company.name)
+          setCompanyName(data.company.name) // MANTENHA ESTE
         }
       })
       .catch((err) => {

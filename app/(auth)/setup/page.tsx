@@ -16,12 +16,12 @@ export default function SetupPage() {
     const hasToken = localStorage.getItem('setup_token')
 
     if (hasToken) {
-      // Continue with wizard
-      router.push('/setup/wizard')
-    } else {
-      // Must enter token to potentially fix/finish setup
-      router.push('/setup/start')
-    }
+          // Continue with wizard
+          // router.push('/setup/wizard') <-- COMENTE
+        } else {
+          // Must enter token to potentially fix/finish setup
+          // router.push('/setup/start') <-- COMENTE
+        }
   }, [router])
 
   return (

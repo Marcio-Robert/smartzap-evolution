@@ -85,16 +85,16 @@ export default function BootstrapPage() {
   const handleConfirm = () => {
     if (!project) return
 
-    // Store token and project info in localStorage for wizard persistence
-    localStorage.setItem('setup_token', token.trim())
-    localStorage.setItem('setup_project', JSON.stringify(project))
+        // Store token and project info in localStorage for wizard persistence
+        localStorage.setItem('setup_token', token.trim())
+        localStorage.setItem('setup_project', JSON.stringify(project))
 
-    setStep('success')
+        setStep('success')
 
-    // Redirect to wizard after brief delay
-    setTimeout(() => {
-      router.push('/setup/wizard')
-    }, 1000)
+        // Redirect to wizard after brief delay
+        // setTimeout(() => {
+        //   router.push('/setup/wizard')
+        // }, 1000)
   }
 
   const handleBack = () => {
