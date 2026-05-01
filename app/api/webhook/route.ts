@@ -60,13 +60,14 @@ export async function GET(request: NextRequest) {
   const challenge = searchParams.get('hub.challenge')
 
   const MY_VERIFY_TOKEN = await getVerifyToken()
+  const ENV_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN?.trim()
 
-  if (mode === 'subscribe' && token === MY_VERIFY_TOKEN) {
+  if (mode === 'subscribe' && (token === MY_VERIFY_TOKEN || (ENV_VERIFY_TOKEN && token === ENV_VERIFY_TOKEN))) {
     console.log('✅ Webhook verified successfully')
     return new Response(challenge || '', { status: 200 })
   }
 
-  console.log('❌ Webhook verification failed')
+  console.log('❌ Webhook verification failed', { received: token, expectedDB: MY_VERIFY_TOKEN, expectedEnv: ENV_VERIFY_TOKEN })
   return new Response('Forbidden', { status: 403 })
 }
 
