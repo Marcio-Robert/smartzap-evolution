@@ -463,6 +463,7 @@ export function DashboardShell({
     const queryClient = useQueryClient()
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     const [isLoggingOut, setIsLoggingOut] = useState(false)
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false)
 
     // Enable real-time toast notifications for global events
     // This shows toasts when campaigns complete, new contacts are added, etc.
@@ -681,21 +682,50 @@ export function DashboardShell({
 
                     <div className="flex items-center gap-6">
                         <div className="relative group">
-                            <Bell size={20} className="text-gray-500 group-hover:text-white transition-colors cursor-pointer" />
-                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary-500 rounded-full border-2 border-zinc-950"></span>
+                            <button onClick={() => setIsNotificationOpen(!isNotificationOpen)} className="relative block">
+                                <Bell size={20} className="text-gray-500 hover:text-white transition-colors cursor-pointer" />
+                                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary-500 rounded-full border-2 border-zinc-950"></span>
+                            </button>
+                            
+                            {isNotificationOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsNotificationOpen(false)}></div>
+                                    <div className="absolute top-full right-0 mt-4 w-80 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                                            <h4 className="text-white font-bold">Notificações</h4>
+                                            <span className="text-[10px] bg-primary-500/20 text-primary-400 px-2 py-0.5 rounded-full font-bold">1 Nova</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-start gap-3 p-2 rounded-lg bg-white/5 transition-colors">
+                                                <div className="w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <CheckCircle2 size={16} className="text-primary-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm text-white font-medium">Sistema atualizado</p>
+                                                    <p className="text-xs text-gray-400 mt-0.5">O SmartZap está pronto para enviar campanhas na nova arquitetura!</p>
+                                                    <p className="text-[10px] text-gray-500 mt-1">Agora mesmo</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 pt-3 border-t border-white/5 text-center">
+                                            <button onClick={() => setIsNotificationOpen(false)} className="text-xs text-gray-500 hover:text-white transition-colors">Fechar</button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </header>
 
                 {/* Page Content */}
-                <main className={`flex-1 ${pathname?.includes('/campaigns/new') || (pathname?.includes('/templates/') && pathname !== '/templates')
+                <main className={`flex-1 flex flex-col min-h-0 ${pathname?.includes('/campaigns/new') || (pathname?.includes('/templates/') && pathname !== '/templates')
                     ? 'overflow-hidden'
                     : 'overflow-auto p-6 lg:p-10'
                     }`}>
                     <div className={
                         pathname?.includes('/campaigns/new') || (pathname?.includes('/templates/') && pathname !== '/templates')
-                            ? 'h-full'
-                            : 'max-w-7xl mx-auto'
+                            ? 'flex-1 min-h-0 flex flex-col'
+                            : 'max-w-7xl mx-auto w-full'
                     }>
                         {/* Account alerts banner - hide in fullscreen mode */}
                         {!pathname?.includes('/campaigns/new') && <AccountAlertBanner />}
