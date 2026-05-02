@@ -93,6 +93,14 @@ export const WHATSAPP_ERRORS: Record<number, WhatsAppError> = {
   // ============================================
   // TEMPLATE
   // ============================================
+  131058: {
+    code: 131058,
+    category: 'template',
+    title: 'Test Template on Production Number',
+    userMessage: 'O template "hello_world" só pode ser enviado de números de teste.',
+    action: 'Crie um template próprio na Meta em vez de usar o hello_world.',
+    retryable: false,
+  },
   132000: {
     code: 132000,
     category: 'template',

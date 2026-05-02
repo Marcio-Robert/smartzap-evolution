@@ -44,7 +44,6 @@ export const useCampaignWizardController = () => {
   const templatesQuery = useQuery({
     queryKey: ['templates'],
     queryFn: templateService.getAll,
-    select: (data) => data.filter(t => t.status === 'APPROVED')
   });
 
   // Get settings for test contact
