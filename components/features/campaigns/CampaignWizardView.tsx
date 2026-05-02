@@ -438,7 +438,7 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
   ];
 
   return (
-    <div className="h-full flex flex-col px-6 lg:px-10 py-4">
+    <div className="flex-1 min-h-0 flex flex-col px-6 lg:px-10 py-4">
       {/* Header Navigation */}
       <div className="shrink-0 mb-4">
         <PrefetchLink href="/campaigns" className="text-xs text-gray-500 hover:text-white inline-flex items-center gap-1 transition-colors">
@@ -1293,8 +1293,8 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
         </div>
 
         {/* Right Content - Preview Panel */}
-        <div className={`hidden lg:flex flex-col lg:col-span-3 bg-zinc-900/30 rounded-2xl border border-white/5 p-4 ${step === 2 && isOverLimit ? 'opacity-30 pointer-events-none' : ''}`}>
-          <div className="flex flex-col h-full">
+        <div className={`hidden lg:flex flex-col lg:col-span-3 bg-zinc-900/30 rounded-2xl border border-white/5 p-4 min-h-0 ${step === 2 && isOverLimit ? 'opacity-30 pointer-events-none' : ''}`}>
+          <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-gray-400 text-xs uppercase tracking-widest font-bold">
                 <Eye size={14} /> Pré-visualização
