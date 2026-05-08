@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { supabase } from '@/lib/supabase'
 
 interface MetaTemplateComponent {
   type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS'
@@ -41,7 +42,7 @@ async function fetchTemplatesFromMeta(businessAccountId: string, accessToken: st
   }
 
   // Transform Meta format to our App format
-  return allTemplates.map((t: MetaTemplate) => {
+  const mappedTemplates = allTemplates.map((t: MetaTemplate) => {
     const bodyComponent = t.components.find((c: MetaTemplateComponent) => c.type === 'BODY')
     return {
       id: t.name,
@@ -55,6 +56,31 @@ async function fetchTemplatesFromMeta(businessAccountId: string, accessToken: st
       components: t.components
     }
   })
+
+  // Persist templates to database so dispatch route can access language/components
+  if (mappedTemplates.length > 0) {
+    try {
+      const dbTemplates = mappedTemplates.map(t => ({
+        name: t.name,
+        category: t.category,
+        language: t.language,
+        status: t.status,
+        components: t.components,
+        updated_at: new Date().toISOString()
+      }))
+      
+      const { error } = await supabase
+        .from('templates')
+        .upsert(dbTemplates, { onConflict: 'name' })
+
+      if (error) throw error
+      console.log(`[Templates Sync] Saved ${dbTemplates.length} templates to database`)
+    } catch (e) {
+      console.error('[Templates Sync] Error saving to database:', e)
+    }
+  }
+
+  return mappedTemplates
 }
 
 // GET /api/templates - Fetch templates using Redis credentials
