@@ -12,6 +12,7 @@ interface Contact {
 interface CampaignWorkflowInput {
   campaignId: string
   templateName: string
+  templateLanguage?: string
   contacts: Contact[]
   templateVariables?: string[]  // Static values for {{2}}, {{3}}, etc.
   phoneNumberId: string
@@ -57,7 +58,7 @@ async function updateContactStatus(campaignId: string, phone: string, status: 's
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 export const { POST } = serve<CampaignWorkflowInput>(
   async (context) => {
-    const { campaignId, templateName, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
+    const { campaignId, templateName, templateLanguage, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
 
     // Step 1: Mark campaign as SENDING in Turso
     await context.run('init-campaign', async () => {
@@ -118,7 +119,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
                   type: 'template',
                   template: {
                     name: templateName,
-                    language: { code: 'pt_BR' },
+                    language: { code: templateLanguage || 'pt_BR' },
                     components: [
                       {
                         type: 'body',

@@ -20,6 +20,23 @@ export async function POST(request: NextRequest) {
   const { campaignId, templateName, whatsappCredentials, templateVariables, flowId } = body
   let { contacts } = body
 
+  // Fetch template language from database to support en_US and other languages
+  let templateLanguage = 'pt_BR'
+  try {
+    const { data: templateData } = await supabase
+      .from('templates')
+      .select('language')
+      .eq('name', templateName)
+      .single()
+      
+    if (templateData && templateData.language) {
+      templateLanguage = templateData.language
+    }
+    console.log(`[Dispatch] Template language resolved to: ${templateLanguage}`)
+  } catch (err) {
+    console.error(`[Dispatch] Failed to fetch template language for ${templateName}`, err)
+  }
+
   // Get template variables from campaign if not provided directly
   let resolvedTemplateVariables: string[] = templateVariables || []
   if (!resolvedTemplateVariables.length) {
@@ -166,6 +183,7 @@ export async function POST(request: NextRequest) {
     const workflowPayload = {
       campaignId,
       templateName,
+      templateLanguage,
       contacts: contacts as DispatchContact[],
       templateVariables: resolvedTemplateVariables,
       phoneNumberId,
