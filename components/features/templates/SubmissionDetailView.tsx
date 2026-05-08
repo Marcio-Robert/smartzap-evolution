@@ -119,7 +119,7 @@ export function SubmissionDetailView({
                 </div>
 
                 {/* Template List */}
-                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl overflow-y-auto">
+                <div className="flex-1 min-h-0 bg-zinc-900 border border-zinc-800 rounded-xl overflow-y-auto">
                     {sections.map(section => {
                         if (section.count === 0) return null;
 

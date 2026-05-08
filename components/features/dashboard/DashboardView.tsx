@@ -249,7 +249,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, recentCampa
               <MoreHorizontal size={20} aria-hidden="true" />
             </button>
           </div>
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-auto">
             {recentCampaigns.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 Nenhuma campanha ainda.

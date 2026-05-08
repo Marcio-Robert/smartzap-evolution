@@ -606,7 +606,7 @@ export function DashboardShell({
                     </div>
 
                     {/* Nav */}
-                    <nav className="flex-1 space-y-6 overflow-y-auto no-scrollbar">
+                    <nav className="flex-1 min-h-0 space-y-6 overflow-y-auto no-scrollbar">
                         <div>
                             <PrefetchLink
                                 href="/campaigns/new"

@@ -1206,7 +1206,7 @@ function WizardContent() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-auto p-0 bg-zinc-950/50">
+            <div className="flex-1 min-h-0 overflow-auto p-0 bg-zinc-950/50">
               <pre className="p-4 text-xs font-mono text-zinc-300 leading-relaxed">
                 {sqlContent}
               </pre>
