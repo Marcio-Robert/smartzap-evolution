@@ -116,7 +116,7 @@ export default function NewTemplateProjectPage() {
     };
 
     return (
-        <div className="container mx-auto py-8 max-w-5xl">
+        <div className="container mx-auto py-8 max-w-5xl flex-1 overflow-y-auto min-h-0 px-4 pb-20">
             <div className="flex items-center gap-4 mb-8">
                 <button onClick={() => router.back()} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full">
                     <ArrowLeft className="w-5 h-5" />
