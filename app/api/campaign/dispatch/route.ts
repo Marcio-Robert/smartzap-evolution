@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   // Fetch template language and components from database
   let templateLanguage = 'pt_BR'
-  let expectedBodyParamsCount = 1 // Default to 1 for backwards compatibility
+  let templateComponents: any[] = []
 
   try {
     const { data: templateData } = await supabase
@@ -42,17 +42,11 @@ export async function POST(request: NextRequest) {
         }
         
         if (Array.isArray(comps)) {
-          const bodyComp = comps.find((c: any) => c.type === 'BODY')
-          if (bodyComp && bodyComp.text) {
-            const matches = bodyComp.text.match(/\{\{\d+\}\}/g)
-            expectedBodyParamsCount = matches ? matches.length : 0
-          } else {
-            expectedBodyParamsCount = 0
-          }
+          templateComponents = comps
         }
       }
     }
-    console.log(`[Dispatch] Template: ${templateName}, Language: ${templateLanguage}, Params: ${expectedBodyParamsCount}`)
+    console.log(`[Dispatch] Template: ${templateName}, Language: ${templateLanguage}, Components count: ${templateComponents.length}`)
   } catch (err) {
     console.error(`[Dispatch] Failed to fetch template data for ${templateName}`, err)
   }
@@ -204,7 +198,7 @@ export async function POST(request: NextRequest) {
       campaignId,
       templateName,
       templateLanguage,
-      expectedBodyParamsCount,
+      templateComponents,
       contacts: contacts as DispatchContact[],
       templateVariables: resolvedTemplateVariables,
       phoneNumberId,

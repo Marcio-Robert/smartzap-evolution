@@ -13,7 +13,7 @@ interface CampaignWorkflowInput {
   campaignId: string
   templateName: string
   templateLanguage?: string
-  expectedBodyParamsCount?: number
+  templateComponents?: any[]
   contacts: Contact[]
   templateVariables?: string[]  // Static values for {{2}}, {{3}}, etc.
   phoneNumberId: string
@@ -21,25 +21,91 @@ interface CampaignWorkflowInput {
 }
 
 /**
- * Build template body parameters
- * {{1}} = contact name (dynamic per contact)
- * {{2}}, {{3}}, ... = static values from templateVariables
+ * Build template components (Header, Body, Buttons) by mapping UI variables
+ * to the correct parameters expected by Meta API.
  */
-function buildBodyParameters(contactName: string, templateVariables: string[] = [], expectedCount: number = 1): Array<{ type: string; text: string }> {
-  const parameters = []
-  
-  if (expectedCount >= 1) {
-    parameters.push({ type: 'text', text: contactName || 'Cliente' })
-  }
-  
-  // Add static variables
-  for (let i = 0; i < templateVariables.length; i++) {
-    if (parameters.length < expectedCount) {
-      parameters.push({ type: 'text', text: templateVariables[i] || '' })
+function buildMetaComponents(contactName: string, templateVariables: string[], templateComponents?: any[]): any[] {
+  if (!templateComponents || templateComponents.length === 0) {
+    // Fallback if no components were passed
+    const parameters = [{ type: 'text', text: contactName || 'Cliente' }]
+    for (const val of templateVariables) {
+      parameters.push({ type: 'text', text: val || '' })
     }
+    return [{ type: 'body', parameters }]
   }
 
-  return parameters
+  const resultComponents: any[] = []
+  
+  // Calculate how many body variables (excluding {{1}})
+  const bodyComponent = templateComponents.find(c => c.type === 'BODY')
+  let bodyVarsCount = 0
+  let hasBodyVar1 = false
+  if (bodyComponent?.text) {
+    const matches = bodyComponent.text.match(/\{\{(\d+)\}\}/g) || []
+    matches.forEach((m: string) => {
+      const varNum = parseInt(m.replace(/[{}]/g, ''))
+      if (varNum === 1) hasBodyVar1 = true
+      else bodyVarsCount++
+    })
+  }
+
+  // Header variables count
+  const headerComponent = templateComponents.find(c => c.type === 'HEADER')
+  let headerVarsCount = 0
+  if (headerComponent?.format === 'TEXT' && headerComponent?.text) {
+    const matches = headerComponent.text.match(/\{\{(\d+)\}\}/g) || []
+    headerVarsCount = matches.length
+  }
+
+  // Build Body Parameters
+  const bodyParameters: any[] = []
+  if (hasBodyVar1) {
+    bodyParameters.push({ type: 'text', text: contactName || 'Cliente' })
+  }
+  for (let i = 0; i < bodyVarsCount; i++) {
+    bodyParameters.push({ type: 'text', text: templateVariables[i] || '' })
+  }
+  if (bodyParameters.length > 0) {
+    resultComponents.push({ type: 'body', parameters: bodyParameters })
+  }
+
+  // Build Header Parameters
+  if (headerVarsCount > 0) {
+    const headerParameters: any[] = []
+    for (let i = 0; i < headerVarsCount; i++) {
+      const val = templateVariables[bodyVarsCount + i] || ''
+      headerParameters.push({ type: 'text', text: val })
+    }
+    resultComponents.push({ type: 'header', parameters: headerParameters })
+  }
+
+  // Build Button Parameters
+  const buttonsComponent = templateComponents.find(c => c.type === 'BUTTONS')
+  if (buttonsComponent?.buttons) {
+    let buttonVarIndexOffset = bodyVarsCount + headerVarsCount
+    buttonsComponent.buttons.forEach((button: any, btnIdx: number) => {
+      if (button.type === 'URL' && button.url?.includes('{{')) {
+        const matches = button.url.match(/\{\{(\d+)\}\}/g) || []
+        if (matches.length > 0) {
+          const buttonParams: any[] = []
+          for (let i = 0; i < matches.length; i++) {
+            buttonParams.push({
+              type: 'text',
+              text: templateVariables[buttonVarIndexOffset++] || ''
+            })
+          }
+          resultComponents.push({
+            type: 'button',
+            sub_type: 'url',
+            index: btnIdx.toString(),
+            parameters: buttonParams
+          })
+        }
+      }
+    })
+  }
+
+  return resultComponents
 }
 
 // Update contact status in Turso
@@ -64,7 +130,7 @@ async function updateContactStatus(campaignId: string, phone: string, status: 's
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 export const { POST } = serve<CampaignWorkflowInput>(
   async (context) => {
-    const { campaignId, templateName, templateLanguage, expectedBodyParamsCount, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
+    const { campaignId, templateName, templateLanguage, templateComponents, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
 
     // Step 1: Mark campaign as SENDING in Turso
     await context.run('init-campaign', async () => {
@@ -108,15 +174,8 @@ export const { POST } = serve<CampaignWorkflowInput>(
             }
 
             // Send message via WhatsApp Cloud API
-            // Build body parameters with contact name + static variables
-            const bodyParameters = buildBodyParameters(contact.name, templateVariables, expectedBodyParamsCount !== undefined ? expectedBodyParamsCount : 1)
-            
-            const components = expectedBodyParamsCount === 0 ? [] : [
-              {
-                type: 'body',
-                parameters: bodyParameters,
-              }
-            ]
+            // Dynamically build components based on template blueprint
+            const components = buildMetaComponents(contact.name, templateVariables || [], templateComponents)
 
             const response = await fetch(
               `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`,
