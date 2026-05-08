@@ -20,21 +20,41 @@ export async function POST(request: NextRequest) {
   const { campaignId, templateName, whatsappCredentials, templateVariables, flowId } = body
   let { contacts } = body
 
-  // Fetch template language from database to support en_US and other languages
+  // Fetch template language and components from database
   let templateLanguage = 'pt_BR'
+  let expectedBodyParamsCount = 1 // Default to 1 for backwards compatibility
+
   try {
     const { data: templateData } = await supabase
       .from('templates')
-      .select('language')
+      .select('language, components')
       .eq('name', templateName)
       .single()
       
-    if (templateData && templateData.language) {
-      templateLanguage = templateData.language
+    if (templateData) {
+      if (templateData.language) templateLanguage = templateData.language
+      
+      if (templateData.components) {
+        // Parse components array. If it's a string, parse it first.
+        let comps = templateData.components
+        if (typeof comps === 'string') {
+          try { comps = JSON.parse(comps) } catch { comps = [] }
+        }
+        
+        if (Array.isArray(comps)) {
+          const bodyComp = comps.find((c: any) => c.type === 'BODY')
+          if (bodyComp && bodyComp.text) {
+            const matches = bodyComp.text.match(/\{\{\d+\}\}/g)
+            expectedBodyParamsCount = matches ? matches.length : 0
+          } else {
+            expectedBodyParamsCount = 0
+          }
+        }
+      }
     }
-    console.log(`[Dispatch] Template language resolved to: ${templateLanguage}`)
+    console.log(`[Dispatch] Template: ${templateName}, Language: ${templateLanguage}, Params: ${expectedBodyParamsCount}`)
   } catch (err) {
-    console.error(`[Dispatch] Failed to fetch template language for ${templateName}`, err)
+    console.error(`[Dispatch] Failed to fetch template data for ${templateName}`, err)
   }
 
   // Get template variables from campaign if not provided directly
@@ -184,6 +204,7 @@ export async function POST(request: NextRequest) {
       campaignId,
       templateName,
       templateLanguage,
+      expectedBodyParamsCount,
       contacts: contacts as DispatchContact[],
       templateVariables: resolvedTemplateVariables,
       phoneNumberId,

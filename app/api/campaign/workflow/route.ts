@@ -13,6 +13,7 @@ interface CampaignWorkflowInput {
   campaignId: string
   templateName: string
   templateLanguage?: string
+  expectedBodyParamsCount?: number
   contacts: Contact[]
   templateVariables?: string[]  // Static values for {{2}}, {{3}}, etc.
   phoneNumberId: string
@@ -24,13 +25,18 @@ interface CampaignWorkflowInput {
  * {{1}} = contact name (dynamic per contact)
  * {{2}}, {{3}}, ... = static values from templateVariables
  */
-function buildBodyParameters(contactName: string, templateVariables: string[] = []): Array<{ type: string; text: string }> {
-  // First parameter is always the contact name
-  const parameters = [{ type: 'text', text: contactName || 'Cliente' }]
-
-  // Add static variables for {{2}}, {{3}}, etc.
-  for (const value of templateVariables) {
-    parameters.push({ type: 'text', text: value || '' })
+function buildBodyParameters(contactName: string, templateVariables: string[] = [], expectedCount: number = 1): Array<{ type: string; text: string }> {
+  const parameters = []
+  
+  if (expectedCount >= 1) {
+    parameters.push({ type: 'text', text: contactName || 'Cliente' })
+  }
+  
+  // Add static variables
+  for (let i = 0; i < templateVariables.length; i++) {
+    if (parameters.length < expectedCount) {
+      parameters.push({ type: 'text', text: templateVariables[i] || '' })
+    }
   }
 
   return parameters
@@ -58,7 +64,7 @@ async function updateContactStatus(campaignId: string, phone: string, status: 's
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 export const { POST } = serve<CampaignWorkflowInput>(
   async (context) => {
-    const { campaignId, templateName, templateLanguage, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
+    const { campaignId, templateName, templateLanguage, expectedBodyParamsCount, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
 
     // Step 1: Mark campaign as SENDING in Turso
     await context.run('init-campaign', async () => {
@@ -103,7 +109,14 @@ export const { POST } = serve<CampaignWorkflowInput>(
 
             // Send message via WhatsApp Cloud API
             // Build body parameters with contact name + static variables
-            const bodyParameters = buildBodyParameters(contact.name, templateVariables)
+            const bodyParameters = buildBodyParameters(contact.name, templateVariables, expectedBodyParamsCount !== undefined ? expectedBodyParamsCount : 1)
+            
+            const components = expectedBodyParamsCount === 0 ? [] : [
+              {
+                type: 'body',
+                parameters: bodyParameters,
+              }
+            ]
 
             const response = await fetch(
               `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`,
@@ -120,12 +133,7 @@ export const { POST } = serve<CampaignWorkflowInput>(
                   template: {
                     name: templateName,
                     language: { code: templateLanguage || 'pt_BR' },
-                    components: [
-                      {
-                        type: 'body',
-                        parameters: bodyParameters,
-                      },
-                    ],
+                    ...(components.length > 0 ? { components } : {}),
                   },
                 }),
               }
