@@ -467,7 +467,7 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
               </div>
 
               {/* Conteúdo */}
-              <div className="p-4 overflow-y-auto space-y-4">
+              <div className="flex-1 min-h-0 p-4 overflow-y-auto space-y-4">
                 {isLoadingDetails ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 size={24} className="animate-spin text-primary-400" />
@@ -632,7 +632,7 @@ export const TemplateListView: React.FC<TemplateListViewProps> = ({
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto">
+            <div className="flex-1 min-h-0 p-6 overflow-y-auto">
               <div className="space-y-6">
 
                 {/* Input Section */}

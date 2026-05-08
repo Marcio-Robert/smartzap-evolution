@@ -137,7 +137,7 @@ export const BulkGenerationModal: React.FC<BulkGenerationModalProps> = ({
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative">
                     {!hasTemplates ? (
                         /* STEP 1: CONFIGURATION */
                         <div className="p-8 max-w-2xl mx-auto space-y-8">
