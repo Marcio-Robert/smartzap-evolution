@@ -45,14 +45,14 @@ function buildMetaComponents(contactName: string, templateVariables: string[], t
     const matches = bodyComponent.text.match(/\{\{([^}]+)\}\}/g) || []
     matches.forEach((m: string) => {
       const varName = m.replace(/[{}]/g, '')
+      const isNamed = isNaN(Number(varName))
       const isContactName = varName === '1' || varName.toLowerCase() === 'nome' || varName.toLowerCase() === 'cliente'
       
-      if (isContactName) {
-        bodyParameters.push({ type: 'text', text: contactName || 'Cliente' })
-      } else {
-        bodyParameters.push({ type: 'text', text: templateVariables[bodyVarsCount] || '' })
-        bodyVarsCount++
-      }
+      const param: any = { type: 'text', text: isContactName ? (contactName || 'Cliente') : (templateVariables[bodyVarsCount] || '') }
+      if (isNamed) param.parameter_name = varName
+      
+      bodyParameters.push(param)
+      if (!isContactName) bodyVarsCount++
     })
   }
 
@@ -68,9 +68,15 @@ function buildMetaComponents(contactName: string, templateVariables: string[], t
     
     if (matches.length > 0) {
       const headerParameters: any[] = []
-      matches.forEach(() => {
+      matches.forEach((m: string) => {
+        const varName = m.replace(/[{}]/g, '')
+        const isNamed = isNaN(Number(varName))
         const val = templateVariables[bodyVarsCount + headerVarsCount] || ''
-        headerParameters.push({ type: 'text', text: val })
+        
+        const param: any = { type: 'text', text: val }
+        if (isNamed) param.parameter_name = varName
+        
+        headerParameters.push(param)
         headerVarsCount++
       })
       resultComponents.push({ type: 'header', parameters: headerParameters })
@@ -86,11 +92,15 @@ function buildMetaComponents(contactName: string, templateVariables: string[], t
         const matches = button.url.match(/\{\{([^}]+)\}\}/g) || []
         if (matches.length > 0) {
           const buttonParams: any[] = []
-          matches.forEach(() => {
-            buttonParams.push({
+          matches.forEach((m: string) => {
+            const varName = m.replace(/[{}]/g, '')
+            const isNamed = isNaN(Number(varName))
+            const param: any = {
               type: 'text',
               text: templateVariables[buttonVarIndexOffset++] || ''
-            })
+            }
+            if (isNamed) param.parameter_name = varName
+            buttonParams.push(param)
           })
           resultComponents.push({
             type: 'button',
