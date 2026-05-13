@@ -41,9 +41,9 @@ interface CampaignWizardViewProps {
   setTemplateVariables?: (vars: string[]) => void;
   templateVariableCount?: number;
   templateVariableInfo?: {
-    body: { index: string | number; placeholder: string; context: string }[];
-    header: { index: string | number; placeholder: string; context: string }[];
-    buttons: { index: string | number; buttonIndex: number; buttonText: string; context: string }[];
+    body: { index: string | number; stateIndex?: number; placeholder: string; context: string; isAutomatic?: boolean }[];
+    header: { index: string | number; stateIndex: number; placeholder: string; context: string }[];
+    buttons: { index: string | number; stateIndex: number; buttonIndex: number; buttonText: string; context: string }[];
     totalExtra: number;
   };
   // Account Limits & Validation
@@ -668,13 +668,13 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                           </p>
                           {templateVariableInfo.body.map((varInfo) => (
                             <div key={`body-${varInfo.index}`} className="flex items-center gap-3">
-                              <span className={`w-12 text-center text-xs font-mono px-2 py-1.5 rounded ${varInfo.index === 1
+                              <span className={`w-12 text-center text-xs font-mono px-2 py-1.5 rounded ${varInfo.isAutomatic
                                 ? 'bg-zinc-800 text-gray-400'
                                 : 'bg-primary-500/20 text-primary-400'
                                 }`}>
                                 {varInfo.placeholder}
                               </span>
-                              {varInfo.index === 1 ? (
+                              {varInfo.isAutomatic ? (
                                 <>
                                   <input
                                     type="text"
@@ -688,11 +688,11 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                                 <>
                                   <input
                                     type="text"
-                                    value={templateVariables?.[varInfo.index - 2] || ''}
+                                    value={templateVariables?.[varInfo.stateIndex as number] || ''}
                                     onChange={(e) => {
                                       if (setTemplateVariables && templateVariables) {
                                         const newVars = [...templateVariables];
-                                        newVars[varInfo.index - 2] = e.target.value;
+                                        newVars[varInfo.stateIndex as number] = e.target.value;
                                         setTemplateVariables(newVars);
                                       }
                                     }}
@@ -724,19 +724,18 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                               </span>
                               <input
                                 type="text"
-                                value={templateVariables?.[templateVariableInfo.body.filter(b => b.index > 1).length + idx] || ''}
+                                value={templateVariables?.[varInfo.stateIndex as number] || ''}
                                 onChange={(e) => {
                                   if (setTemplateVariables && templateVariables) {
                                     const newVars = [...templateVariables];
-                                    const bodyVarsCount = templateVariableInfo.body.filter(b => b.index > 1).length;
-                                    newVars[bodyVarsCount + idx] = e.target.value;
+                                    newVars[varInfo.stateIndex as number] = e.target.value;
                                     setTemplateVariables(newVars);
                                   }
                                 }}
                                 placeholder={varInfo.context}
                                 className="flex-1 px-4 py-2 bg-zinc-900/50 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all text-white text-sm placeholder-gray-600"
                               />
-                              {!templateVariables?.[templateVariableInfo.body.filter(b => b.index > 1).length + idx] ? (
+                              {!templateVariables?.[varInfo.stateIndex as number] ? (
                                 <span className="text-xs text-amber-400">obrigatório</span>
                               ) : (
                                 <Check size={16} className="text-blue-400" />
@@ -753,9 +752,6 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                             <ExternalLink size={12} /> URLs Dinâmicas dos Botões
                           </p>
                           {templateVariableInfo.buttons.map((varInfo, idx) => {
-                            const bodyVarsCount = templateVariableInfo.body.filter(b => b.index > 1).length;
-                            const headerVarsCount = templateVariableInfo.header.length;
-                            const varIndex = bodyVarsCount + headerVarsCount + idx;
                             return (
                               <div key={`button-${varInfo.buttonIndex}`} className="flex items-center gap-3">
                                 <span className="w-auto min-w-[48px] text-center text-xs font-mono bg-amber-500/20 text-amber-400 px-2 py-1.5 rounded">
@@ -763,18 +759,18 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                                 </span>
                                 <input
                                   type="text"
-                                  value={templateVariables?.[varIndex] || ''}
+                                  value={templateVariables?.[varInfo.stateIndex as number] || ''}
                                   onChange={(e) => {
                                     if (setTemplateVariables && templateVariables) {
                                       const newVars = [...templateVariables];
-                                      newVars[varIndex] = e.target.value;
+                                      newVars[varInfo.stateIndex as number] = e.target.value;
                                       setTemplateVariables(newVars);
                                     }
                                   }}
-                                  placeholder={`Parte dinâmica da URL do botão "${varInfo.buttonText}"`}
+                                  placeholder={varInfo.context}
                                   className="flex-1 px-4 py-2 bg-zinc-900/50 border border-white/10 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 outline-none transition-all text-white text-sm placeholder-gray-600"
                                 />
-                                {!templateVariables?.[varIndex] ? (
+                                {!templateVariables?.[varInfo.stateIndex as number] ? (
                                   <span className="text-xs text-amber-400">obrigatório</span>
                                 ) : (
                                   <Check size={16} className="text-amber-400" />

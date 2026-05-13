@@ -166,9 +166,9 @@ export const useCampaignWizardController = () => {
     
     const components = selectedTemplate.components || [];
     const result = {
-      body: [] as { index: string | number; placeholder: string; context: string }[],
-      header: [] as { index: string | number; placeholder: string; context: string }[],
-      buttons: [] as { index: string | number; buttonIndex: number; buttonText: string; context: string }[],
+      body: [] as { index: string | number; stateIndex?: number; placeholder: string; context: string; isAutomatic?: boolean }[],
+      header: [] as { index: string | number; stateIndex: number; placeholder: string; context: string }[],
+      buttons: [] as { index: string | number; stateIndex: number; buttonIndex: number; buttonText: string; context: string }[],
       totalExtra: 0,
     };
     
@@ -185,12 +185,14 @@ export const useCampaignWizardController = () => {
           result.body.push({ 
             index: varName, 
             placeholder: match, 
-            context: 'Nome do contato (automático)' 
+            context: 'Nome do contato (automático)',
+            isAutomatic: true
           });
         } else {
           // {{2}}, {{3}}, etc. need user input
           result.body.push({ 
-            index: varName, 
+            index: varName,
+            stateIndex: result.totalExtra,
             placeholder: match, 
             context: `Variável ${varName} do texto` 
           });
@@ -206,7 +208,8 @@ export const useCampaignWizardController = () => {
       matches.forEach((match) => {
         const varName = match.replace(/[{}]/g, '');
         result.header.push({ 
-          index: varName, 
+          index: varName,
+          stateIndex: result.totalExtra,
           placeholder: match, 
           context: 'Variável do cabeçalho' 
         });
@@ -224,6 +227,7 @@ export const useCampaignWizardController = () => {
             const varName = match.replace(/[{}]/g, '');
             result.buttons.push({
               index: varName,
+              stateIndex: result.totalExtra,
               buttonIndex: btnIdx,
               buttonText: button.text,
               context: `URL dinâmica do botão "${button.text}"`
