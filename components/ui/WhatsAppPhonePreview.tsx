@@ -9,15 +9,27 @@ import { TemplateComponent, TemplateButton } from '../../types';
 // ============================================================================
 
 /**
- * Replaces template variables like {{1}}, {{2}} with actual values
+ * Replaces template variables with actual values sequentially
  */
 const replaceVariables = (text: string, variables?: string[]): string => {
   if (!variables || !Array.isArray(variables) || variables.length === 0) return text;
 
   let result = text;
-  variables.forEach((value, index) => {
-    const placeholder = `{{${index + 1}}}`;
-    result = result.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), value || '');
+  let userVarIndex = 1; // Index 0 is always reserved for contactName
+  
+  // Replace each {{...}} with the appropriate variable
+  result = result.replace(/\{\{([^}]+)\}\}/g, (match, p1) => {
+    // Determine if this is the automatic contact name
+    const isContactName = p1 === '1' || p1.toLowerCase() === 'nome' || p1.toLowerCase() === 'cliente';
+    
+    if (isContactName) {
+      return variables[0] || match;
+    } else {
+      if (userVarIndex < variables.length) {
+        return variables[userVarIndex++] || match;
+      }
+      return match;
+    }
   });
 
   return result;

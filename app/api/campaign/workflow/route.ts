@@ -36,47 +36,45 @@ function buildMetaComponents(contactName: string, templateVariables: string[], t
 
   const resultComponents: any[] = []
   
-  // Calculate how many body variables (excluding {{1}})
+  // Calculate how many body variables and build body parameters in order
   const bodyComponent = templateComponents.find(c => c.type === 'BODY')
   let bodyVarsCount = 0
-  let hasBodyVar1 = false
+  const bodyParameters: any[] = []
+  
   if (bodyComponent?.text) {
-    const matches = bodyComponent.text.match(/\{\{(\d+)\}\}/g) || []
+    const matches = bodyComponent.text.match(/\{\{([^}]+)\}\}/g) || []
     matches.forEach((m: string) => {
-      const varNum = parseInt(m.replace(/[{}]/g, ''))
-      if (varNum === 1) hasBodyVar1 = true
-      else bodyVarsCount++
+      const varName = m.replace(/[{}]/g, '')
+      const isContactName = varName === '1' || varName.toLowerCase() === 'nome' || varName.toLowerCase() === 'cliente'
+      
+      if (isContactName) {
+        bodyParameters.push({ type: 'text', text: contactName || 'Cliente' })
+      } else {
+        bodyParameters.push({ type: 'text', text: templateVariables[bodyVarsCount] || '' })
+        bodyVarsCount++
+      }
     })
+  }
+
+  if (bodyParameters.length > 0) {
+    resultComponents.push({ type: 'body', parameters: bodyParameters })
   }
 
   // Header variables count
   const headerComponent = templateComponents.find(c => c.type === 'HEADER')
   let headerVarsCount = 0
   if (headerComponent?.format === 'TEXT' && headerComponent?.text) {
-    const matches = headerComponent.text.match(/\{\{(\d+)\}\}/g) || []
-    headerVarsCount = matches.length
-  }
-
-  // Build Body Parameters
-  const bodyParameters: any[] = []
-  if (hasBodyVar1) {
-    bodyParameters.push({ type: 'text', text: contactName || 'Cliente' })
-  }
-  for (let i = 0; i < bodyVarsCount; i++) {
-    bodyParameters.push({ type: 'text', text: templateVariables[i] || '' })
-  }
-  if (bodyParameters.length > 0) {
-    resultComponents.push({ type: 'body', parameters: bodyParameters })
-  }
-
-  // Build Header Parameters
-  if (headerVarsCount > 0) {
-    const headerParameters: any[] = []
-    for (let i = 0; i < headerVarsCount; i++) {
-      const val = templateVariables[bodyVarsCount + i] || ''
-      headerParameters.push({ type: 'text', text: val })
+    const matches = headerComponent.text.match(/\{\{([^}]+)\}\}/g) || []
+    
+    if (matches.length > 0) {
+      const headerParameters: any[] = []
+      matches.forEach(() => {
+        const val = templateVariables[bodyVarsCount + headerVarsCount] || ''
+        headerParameters.push({ type: 'text', text: val })
+        headerVarsCount++
+      })
+      resultComponents.push({ type: 'header', parameters: headerParameters })
     }
-    resultComponents.push({ type: 'header', parameters: headerParameters })
   }
 
   // Build Button Parameters
@@ -85,15 +83,15 @@ function buildMetaComponents(contactName: string, templateVariables: string[], t
     let buttonVarIndexOffset = bodyVarsCount + headerVarsCount
     buttonsComponent.buttons.forEach((button: any, btnIdx: number) => {
       if (button.type === 'URL' && button.url?.includes('{{')) {
-        const matches = button.url.match(/\{\{(\d+)\}\}/g) || []
+        const matches = button.url.match(/\{\{([^}]+)\}\}/g) || []
         if (matches.length > 0) {
           const buttonParams: any[] = []
-          for (let i = 0; i < matches.length; i++) {
+          matches.forEach(() => {
             buttonParams.push({
               type: 'text',
               text: templateVariables[buttonVarIndexOffset++] || ''
             })
-          }
+          })
           resultComponents.push({
             type: 'button',
             sub_type: 'url',

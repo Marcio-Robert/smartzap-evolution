@@ -166,31 +166,33 @@ export const useCampaignWizardController = () => {
     
     const components = selectedTemplate.components || [];
     const result = {
-      body: [] as { index: number; placeholder: string; context: string }[],
-      header: [] as { index: number; placeholder: string; context: string }[],
-      buttons: [] as { index: number; buttonIndex: number; buttonText: string; context: string }[],
+      body: [] as { index: string | number; placeholder: string; context: string }[],
+      header: [] as { index: string | number; placeholder: string; context: string }[],
+      buttons: [] as { index: string | number; buttonIndex: number; buttonText: string; context: string }[],
       totalExtra: 0,
     };
     
     // Parse body variables
     const bodyComponent = components.find(c => c.type === 'BODY');
     if (bodyComponent?.text) {
-      const matches = bodyComponent.text.match(/\{\{(\d+)\}\}/g) || [];
+      const matches = bodyComponent.text.match(/\{\{([^}]+)\}\}/g) || [];
       matches.forEach((match, idx) => {
-        const varNum = parseInt(match.replace(/[{}]/g, ''));
-        if (varNum === 1) {
+        const varName = match.replace(/[{}]/g, '');
+        const isContactName = varName === '1' || varName.toLowerCase() === 'nome' || varName.toLowerCase() === 'cliente';
+        
+        if (isContactName) {
           // {{1}} is always the contact name - automatic
           result.body.push({ 
-            index: varNum, 
+            index: varName, 
             placeholder: match, 
             context: 'Nome do contato (automático)' 
           });
         } else {
           // {{2}}, {{3}}, etc. need user input
           result.body.push({ 
-            index: varNum, 
+            index: varName, 
             placeholder: match, 
-            context: `Variável ${varNum} do texto` 
+            context: `Variável ${varName} do texto` 
           });
           result.totalExtra++;
         }
@@ -200,11 +202,11 @@ export const useCampaignWizardController = () => {
     // Parse header variables (text headers only)
     const headerComponent = components.find(c => c.type === 'HEADER');
     if (headerComponent?.format === 'TEXT' && headerComponent?.text) {
-      const matches = headerComponent.text.match(/\{\{(\d+)\}\}/g) || [];
+      const matches = headerComponent.text.match(/\{\{([^}]+)\}\}/g) || [];
       matches.forEach((match) => {
-        const varNum = parseInt(match.replace(/[{}]/g, ''));
+        const varName = match.replace(/[{}]/g, '');
         result.header.push({ 
-          index: varNum, 
+          index: varName, 
           placeholder: match, 
           context: 'Variável do cabeçalho' 
         });
@@ -217,11 +219,11 @@ export const useCampaignWizardController = () => {
     if (buttonsComponent?.buttons) {
       buttonsComponent.buttons.forEach((button, btnIdx) => {
         if (button.type === 'URL' && button.url?.includes('{{')) {
-          const matches = button.url.match(/\{\{(\d+)\}\}/g) || [];
+          const matches = button.url.match(/\{\{([^}]+)\}\}/g) || [];
           matches.forEach((match) => {
-            const varNum = parseInt(match.replace(/[{}]/g, ''));
+            const varName = match.replace(/[{}]/g, '');
             result.buttons.push({
-              index: varNum,
+              index: varName,
               buttonIndex: btnIdx,
               buttonText: button.text,
               context: `URL dinâmica do botão "${button.text}"`

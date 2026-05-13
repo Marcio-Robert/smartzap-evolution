@@ -41,9 +41,9 @@ interface CampaignWizardViewProps {
   setTemplateVariables?: (vars: string[]) => void;
   templateVariableCount?: number;
   templateVariableInfo?: {
-    body: { index: number; placeholder: string; context: string }[];
-    header: { index: number; placeholder: string; context: string }[];
-    buttons: { index: number; buttonIndex: number; buttonText: string; context: string }[];
+    body: { index: string | number; placeholder: string; context: string }[];
+    header: { index: string | number; placeholder: string; context: string }[];
+    buttons: { index: string | number; buttonIndex: number; buttonText: string; context: string }[];
     totalExtra: number;
   };
   // Account Limits & Validation
