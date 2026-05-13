@@ -699,7 +699,7 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                                     placeholder={varInfo.context}
                                     className="flex-1 px-4 py-2 bg-zinc-900/50 border border-white/10 rounded-lg focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 outline-none transition-all text-white text-sm placeholder-gray-600"
                                   />
-                                  {!templateVariables?.[varInfo.index - 2] ? (
+                                  {!templateVariables?.[varInfo.stateIndex as number] ? (
                                     <span className="text-xs text-amber-400">obrigatório</span>
                                   ) : (
                                     <Check size={16} className="text-primary-400" />
