@@ -556,7 +556,7 @@ async function handleInboundMessage(
 
     // Try to find existing contact by phone (order+limit to handle duplicates)
     const { data: existingContact } = await supabase
-      .from("contacts")
+      .from('flow_contacts')
       .select("id")
       .eq("organization_id", channel.organization_id)
       .eq("phone", phone)
@@ -573,7 +573,7 @@ async function handleInboundMessage(
       const contactName = payload.senderName || phone;
 
       const { data: newContact, error: contactCreateErr } = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .insert({
           organization_id: channel.organization_id,
           name: contactName,
@@ -807,9 +807,9 @@ async function handlePresenceEvent(
   const phone = normalizePhone(payload.phone);
   if (!phone) return json(200, { ok: true, skipped: "invalid_phone" });
 
-  // Only broadcast for contacts that exist AND have an open deal
+  // Only broadcast for flow_contacts that exist AND have an open deal
   const { data: contact } = await supabase
-    .from("contacts")
+    .from('flow_contacts')
     .select("id, name")
     .eq("organization_id", channel.organization_id)
     .eq("phone", phone)

@@ -43,7 +43,7 @@ interface MetaWebhookValue {
     display_phone_number: string;
     phone_number_id: string;
   };
-  contacts?: MetaWebhookContact[];
+  flow_contacts?: MetaWebhookContact[];
   messages?: MetaWebhookMessage[];
   statuses?: MetaWebhookStatus[];
   errors?: MetaApiError[];
@@ -58,7 +58,7 @@ interface MetaWebhookMessage {
   id: string;
   from: string;
   timestamp: string;
-  type: "text" | "image" | "video" | "audio" | "document" | "sticker" | "location" | "contacts" | "button" | "interactive";
+  type: "text" | "image" | "video" | "audio" | "document" | "sticker" | "location" | "flow_contacts" | "button" | "interactive";
   text?: { body: string };
   image?: MetaMediaMessage;
   video?: MetaMediaMessage;
@@ -66,7 +66,7 @@ interface MetaWebhookMessage {
   document?: MetaMediaMessage & { filename?: string };
   sticker?: MetaMediaMessage;
   location?: { latitude: number; longitude: number; name?: string; address?: string };
-  contacts?: unknown[];
+  flow_contacts?: unknown[];
   button?: { text: string; payload: string };
   interactive?: unknown;
   context?: { from: string; id: string };
@@ -532,7 +532,7 @@ Deno.serve(async (req) => {
 
     // Process incoming messages
     if (value.messages?.[0]) {
-      const contact = value.contacts?.[0];
+      const contact = value.flow_contacts?.[0];
       for (const message of value.messages) {
         await handleInboundMessage(supabase, channel, message, contact);
       }
@@ -767,7 +767,7 @@ async function handleInboundMessage(
     // Backfill: if we have a BSUID now but the contact was found by phone, store bsuid
     if (bsuid && contactId) {
       await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .update({ whatsapp_bsuid: bsuid })
         .eq("id", contactId)
         .is("whatsapp_bsuid", null); // Only update if not already set (avoid overwrite)
@@ -779,7 +779,7 @@ async function handleInboundMessage(
     if (bsuid) {
       // 1. Try by BSUID first
       const res = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .select("id")
         .eq("organization_id", channel.organization_id)
         .eq("whatsapp_bsuid", bsuid)
@@ -793,7 +793,7 @@ async function handleInboundMessage(
     if (!existingContact && phone) {
       // 2. Fallback: look up by phone (handles transition period + phone-based wa_ids)
       const res = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .select("id, whatsapp_bsuid")
         .eq("organization_id", channel.organization_id)
         .eq("phone", phone)
@@ -806,7 +806,7 @@ async function handleInboundMessage(
       // Backfill BSUID on existing phone-based contact if BSUID now available
       if (res.data && bsuid && !res.data.whatsapp_bsuid) {
         await supabase
-          .from("contacts")
+          .from('flow_contacts')
           .update({ whatsapp_bsuid: bsuid })
           .eq("id", res.data.id);
       }
@@ -834,7 +834,7 @@ async function handleInboundMessage(
       if (bsuid) insertData.whatsapp_bsuid = bsuid;
 
       const { data: newContact, error: contactCreateErr } = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .insert(insertData)
         .select("id")
         .single();
@@ -1338,7 +1338,7 @@ async function handleInstagramInboundMessage(
   } else {
     // Instagram doesn't expose phone/email — lookup by IGSID in metadata (order+limit to handle duplicates)
     const { data: existingContact } = await supabase
-      .from("contacts")
+      .from('flow_contacts')
       .select("id")
       .eq("organization_id", channel.organization_id)
       .contains("metadata", { instagram_id: senderId })
@@ -1354,7 +1354,7 @@ async function handleInstagramInboundMessage(
       const contactName = `Instagram ${senderId.slice(-6)}`;
 
       const { data: newContact, error: contactCreateErr } = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .insert({
           organization_id: channel.organization_id,
           name: contactName,

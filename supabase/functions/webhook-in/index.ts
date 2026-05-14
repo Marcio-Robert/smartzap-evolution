@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
     if (leadPhone) filters.push(`phone.eq.${leadPhone}`);
 
     const { data: existingContacts, error: findErr } = await supabase
-      .from("contacts")
+      .from('flow_contacts')
       .select("id, name, email, phone, organization_id")
       .eq("organization_id", source.organization_id)
       .or(filters.join(","))
@@ -321,7 +321,7 @@ Deno.serve(async (req) => {
 
       if (Object.keys(updates).length > 0) {
         const { error: updErr } = await supabase
-          .from("contacts")
+          .from('flow_contacts')
           .update(updates)
           .eq("id", contactId);
         if (updErr) return json(500, { error: "Falha ao atualizar contato", details: updErr.message });
@@ -331,7 +331,7 @@ Deno.serve(async (req) => {
       }
     } else {
       const { data: created, error: createErr } = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .insert({
           organization_id: source.organization_id,
           name: leadName || leadEmail || leadPhone || "Lead",

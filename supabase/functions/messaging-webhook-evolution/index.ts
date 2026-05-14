@@ -424,7 +424,7 @@ async function handleMessagesUpsert(
   } else {
     // Find or create contact
     const { data: existingContact, error: contactLookupErr } = await supabase
-      .from("contacts")
+      .from('flow_contacts')
       .select("id")
       .eq("organization_id", channel.organization_id)
       .eq("phone", phone)
@@ -444,7 +444,7 @@ async function handleMessagesUpsert(
       const contactName = pushName || phone;
 
       const { data: newContact, error: contactCreateErr } = await supabase
-        .from("contacts")
+        .from('flow_contacts')
         .insert({
           organization_id: channel.organization_id,
           name: contactName,
