@@ -23,3 +23,5 @@ dist-server/
 
 # Testing
 coverage/
+
+supabase
