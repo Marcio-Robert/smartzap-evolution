@@ -24,4 +24,4 @@ dist-server/
 # Testing
 coverage/
 
-supabase
+supabase/functions
