@@ -82,13 +82,17 @@ export async function POST(request: NextRequest) {
 
   console.log('📨 Webhook received:', JSON.stringify(body))
 
-  // Encaminhamento automático para o n8n (FIRE AND FORGET)
+  // Encaminhamento para o n8n (Aguardando a execução para evitar que o ambiente serverless durma)
   if (process.env.N8N_WEBHOOK_URL) {
-    fetch(process.env.N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).catch(e => console.error('Erro ao encaminhar payload para n8n:', e));
+    try {
+      await fetch(process.env.N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      console.error('Erro ao encaminhar payload para n8n:', e);
+    }
   }
 
   try {
