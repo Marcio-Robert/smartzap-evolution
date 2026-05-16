@@ -216,6 +216,23 @@ export const { POST } = serve<CampaignWorkflowInput>(
 
               sentCount++
               console.log(`✅ Sent to ${contact.phone}`)
+
+              // Disparo para o Webhook Logger do n8n (Ponte de Registro)
+              // A URL deve ser configurada na variável de ambiente: N8N_WEBHOOK_LOGGER_URL
+              if (process.env.N8N_WEBHOOK_LOGGER_URL) {
+                const bodyText = templateComponents?.find(c => c.type === 'BODY')?.text || templateName;
+                fetch(process.env.N8N_WEBHOOK_LOGGER_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    telefone: contact.phone,
+                    texto_campanha: bodyText,
+                    tipo: 'template'
+                  })
+                }).catch(() => {
+                  // Catch silencioso garantindo a integridade do fluxo principal
+                });
+              }
             } else {
               // Extract error code and translate to Portuguese
               const errorCode = data.error?.code || 0
