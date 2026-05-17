@@ -49,7 +49,12 @@ function buildMetaComponents(contactName: string, templateVariables: string[], t
       const isNamed = isNaN(Number(varName))
       const isContactName = varName === '1' || varName.toLowerCase() === 'nome' || varName.toLowerCase() === 'cliente'
       
-      const param: any = { type: 'text', text: isContactName ? (contactName || 'Cliente') : (templateVariables[bodyVarsCount] || '') }
+      let finalName = contactName || 'Cliente'
+      if (finalName.toLowerCase() === 'desconhecido' || finalName.toLowerCase() === 'sem nome') {
+        finalName = 'Cliente'
+      }
+      
+      const param: any = { type: 'text', text: isContactName ? finalName : (templateVariables[bodyVarsCount] || '') }
       if (isNamed) param.parameter_name = varName
       
       bodyParameters.push(param)
