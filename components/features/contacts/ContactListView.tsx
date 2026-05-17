@@ -18,9 +18,11 @@ const parseCSV = (text: string) => {
   const lines = text.split('\n').filter(l => l.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/['"]/g, ''));
+  const delimiter = lines[0].includes(';') ? ';' : ',';
+
+  const headers = lines[0].split(delimiter).map(h => h.trim().replace(/['"]/g, ''));
   const rows = lines.slice(1).map(line => {
-    return line.split(',').map(cell => cell.trim().replace(/['"]/g, ''));
+    return line.split(delimiter).map(cell => cell.trim().replace(/['"]/g, ''));
   });
   return { headers, rows };
 };
