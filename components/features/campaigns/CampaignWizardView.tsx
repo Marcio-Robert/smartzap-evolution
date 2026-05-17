@@ -365,6 +365,7 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
   allContacts,
   selectedContacts,
   selectedContactIds,
+  setSelectedContactIds,
   toggleContact,
   availableTemplates,
   selectedTemplate,
