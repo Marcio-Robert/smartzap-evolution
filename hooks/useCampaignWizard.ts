@@ -354,6 +354,7 @@ export const useCampaignWizardController = () => {
     allContacts,
     selectedContacts,
     selectedContactIds,
+    setSelectedContactIds,
     toggleContact,
     availableTemplates,
     selectedTemplate,

@@ -46,18 +46,16 @@ export const useContactsController = () => {
     initialData: { total: 0, optIn: 0, optOut: 0 }
   });
 
-  const tagsQuery = useQuery({
-    queryKey: ['contactTags'],
-    queryFn: contactService.getTags,
-    staleTime: 60 * 1000,  // 60 segundos
-    initialData: []
-  });
+  const tags = useMemo(() => {
+    if (!contactsQuery.data?.list) return [];
+    const allTags = contactsQuery.data.list.flatMap(c => c.tags || []);
+    return [...new Set(allTags)].filter(t => t); // filter out empty strings just in case
+  }, [contactsQuery.data?.list]);
 
   // --- Mutations ---
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ['contacts'] });
     queryClient.invalidateQueries({ queryKey: ['contactStats'] });
-    queryClient.invalidateQueries({ queryKey: ['contactTags'] });
   };
 
   const addMutation = useMutation({
@@ -269,7 +267,7 @@ export const useContactsController = () => {
     contacts: paginatedContacts,
     allFilteredContacts: filteredContacts,
     stats: statsQuery.data,
-    tags: tagsQuery.data,
+    tags: tags,
     isLoading: contactsQuery.isLoading || statsQuery.isLoading,
 
     // Filters

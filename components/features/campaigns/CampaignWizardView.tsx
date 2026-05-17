@@ -26,6 +26,7 @@ interface CampaignWizardViewProps {
   allContacts: Contact[];
   selectedContacts: Contact[];
   selectedContactIds: string[];
+  setSelectedContactIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   toggleContact: (contactId: string) => void;
   availableTemplates: Template[];
   selectedTemplate?: Template;
@@ -436,6 +437,37 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
     { number: 2, title: 'Público' },
     { number: 3, title: 'Revisão & Lançamento' },
   ];
+
+  // Tag Filtering for Specific Contacts
+  const [tagFilter, setTagFilter] = useState<string>('ALL');
+  
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>();
+    allContacts.forEach(c => c.tags?.forEach(t => tags.add(t)));
+    return Array.from(tags).sort();
+  }, [allContacts]);
+
+  const filteredSpecificContacts = useMemo(() => {
+    if (tagFilter === 'ALL') return allContacts;
+    return allContacts.filter(c => c.tags?.includes(tagFilter));
+  }, [allContacts, tagFilter]);
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredSpecificContacts.map(c => c.id);
+    setSelectedContactIds(prev => {
+      const newSet = new Set(prev);
+      filteredIds.forEach(id => newSet.add(id));
+      return Array.from(newSet);
+    });
+  };
+
+  const handleClearFiltered = () => {
+    const filteredIds = new Set(filteredSpecificContacts.map(c => c.id));
+    setSelectedContactIds(prev => prev.filter(id => !filteredIds.has(id)));
+  };
+
+  const isAllFilteredSelected = filteredSpecificContacts.length > 0 && 
+    filteredSpecificContacts.every(c => selectedContactIds.includes(c.id));
 
   return (
     <div className="flex-1 min-h-0 flex flex-col px-6 lg:px-10 py-4">
@@ -947,16 +979,46 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                 {/* Contact Selection List */}
                 {recipientSource === 'specific' && (
                   <div className="bg-zinc-900/50 border border-white/10 rounded-xl p-6 mt-6 animate-in zoom-in duration-300">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-white font-bold text-sm">Seus Contatos</h4>
-                      <span className="text-xs text-gray-500">{recipientCount}/{totalContacts} selecionados</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                      <div>
+                        <h4 className="text-white font-bold text-sm">Seus Contatos</h4>
+                        <span className="text-xs text-gray-500">{recipientCount}/{totalContacts} selecionados no total</span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Tag Filter */}
+                        <select
+                          value={tagFilter}
+                          onChange={(e) => setTagFilter(e.target.value)}
+                          className="px-3 py-1.5 text-xs font-medium bg-zinc-900 text-gray-300 hover:text-white rounded-lg border border-white/10 transition-colors outline-none cursor-pointer"
+                        >
+                          <option value="ALL">Todas as Tags</option>
+                          {availableTags.map(tag => (
+                            <option key={tag} value={tag}>{tag}</option>
+                          ))}
+                        </select>
+
+                        {/* Bulk Actions for Filtered View */}
+                        {filteredSpecificContacts.length > 0 && (
+                          <button
+                            onClick={isAllFilteredSelected ? handleClearFiltered : handleSelectAllFiltered}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                              isAllFilteredSelected 
+                                ? 'bg-zinc-800 text-gray-300 border-white/10 hover:bg-zinc-700' 
+                                : 'bg-primary-500/10 text-primary-400 border-primary-500/30 hover:bg-primary-500/20'
+                            }`}
+                          >
+                            {isAllFilteredSelected ? 'Limpar Visíveis' : 'Selecionar Visíveis'}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      {allContacts.length === 0 ? (
-                        <p className="text-gray-500 text-sm text-center py-8">Nenhum contato encontrado</p>
+                      {filteredSpecificContacts.length === 0 ? (
+                        <p className="text-gray-500 text-sm text-center py-8">Nenhum contato encontrado com este filtro</p>
                       ) : (
-                        allContacts.map((contact) => {
+                        filteredSpecificContacts.map((contact) => {
                           const isSelected = selectedContactIds.includes(contact.id);
                           return (
                             <label
@@ -976,8 +1038,22 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
                                 <p className="text-sm font-medium text-white truncate">{contact.name || contact.phone}</p>
                                 <p className="text-xs text-gray-500 font-mono">{contact.phone}</p>
                               </div>
+                              {contact.tags && contact.tags.length > 0 && (
+                                <div className="hidden sm:flex items-center gap-1">
+                                  {contact.tags.slice(0, 2).map((tag, i) => (
+                                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 border border-white/5 text-gray-400 truncate max-w-[80px]">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  {contact.tags.length > 2 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 border border-white/5 text-gray-500">
+                                      +{contact.tags.length - 2}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               {isSelected && (
-                                <Check size={16} className="text-primary-400 flex-shrink-0" />
+                                <Check size={16} className="text-primary-400 flex-shrink-0 ml-2" />
                               )}
                             </label>
                           );
