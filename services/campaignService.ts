@@ -160,22 +160,16 @@ export const campaignService = {
 
     const newCampaign = await response.json();
 
-    // 2. If scheduled for later, don't dispatch now
-    if (scheduledAt) {
-      console.log(`Campaign ${newCampaign.id} scheduled for ${scheduledAt}`);
-      return newCampaign;
-    }
-
-    // 3. Dispatch to Backend immediately (Execution)
+    // 2. Dispatch to Backend (Execution or Scheduling)
     if (selectedContacts && selectedContacts.length > 0) {
-      await campaignService.dispatchToBackend(newCampaign.id, templateName, selectedContacts, templateVariables);
+      await campaignService.dispatchToBackend(newCampaign.id, templateName, selectedContacts, templateVariables, scheduledAt);
     }
 
     return newCampaign;
   },
 
   // Internal: dispatch campaign to backend queue
-  dispatchToBackend: async (campaignId: string, templateName: string, contacts?: { name: string; phone: string }[], templateVariables?: string[]): Promise<boolean> => {
+  dispatchToBackend: async (campaignId: string, templateName: string, contacts?: { name: string; phone: string }[], templateVariables?: string[], scheduledAt?: string): Promise<boolean> => {
     try {
       // Use provided contacts - contacts must be passed explicitly
       if (!contacts || contacts.length === 0) {
@@ -192,6 +186,7 @@ export const campaignService = {
           templateName,
           contacts,
           templateVariables, // Pass template variables to workflow
+          scheduledAt, // Pass scheduledAt to workflow
           // whatsappCredentials fetched from Redis on server
         })
       });

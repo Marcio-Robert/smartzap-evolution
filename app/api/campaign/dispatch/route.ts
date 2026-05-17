@@ -17,7 +17,7 @@ const generateId = () => Math.random().toString(36).substr(2, 9)
 // Trigger campaign dispatch workflow
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { campaignId, templateName, whatsappCredentials, templateVariables, flowId } = body
+  const { campaignId, templateName, whatsappCredentials, templateVariables, flowId, scheduledAt } = body
   let { contacts } = body
 
   // Fetch template language and components from database
@@ -203,6 +203,7 @@ export async function POST(request: NextRequest) {
       templateVariables: resolvedTemplateVariables,
       phoneNumberId,
       accessToken,
+      scheduledAt,
     }
 
     if (isLocalhost) {

@@ -18,6 +18,7 @@ interface CampaignWorkflowInput {
   templateVariables?: string[]  // Static values for {{2}}, {{3}}, etc.
   phoneNumberId: string
   accessToken: string
+  scheduledAt?: string
 }
 
 /**
@@ -138,7 +139,28 @@ async function updateContactStatus(campaignId: string, phone: string, status: 's
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 export const { POST } = serve<CampaignWorkflowInput>(
   async (context) => {
-    const { campaignId, templateName, templateLanguage, templateComponents, contacts, templateVariables, phoneNumberId, accessToken } = context.requestPayload
+    const { campaignId, templateName, templateLanguage, templateComponents, contacts, templateVariables, phoneNumberId, accessToken, scheduledAt } = context.requestPayload
+
+    // Step 0: If scheduled, wait until the scheduled time
+    if (scheduledAt) {
+      await context.sleepUntil('wait-for-schedule', new Date(scheduledAt))
+      
+      // Verify campaign wasn't started manually or cancelled while sleeping
+      const shouldProceed = await context.run('verify-status', async () => {
+        const { data: campaign } = await supabase
+          .from('campaigns')
+          .select('status')
+          .eq('id', campaignId)
+          .single()
+          
+        return campaign?.status === CampaignStatus.SCHEDULED
+      })
+      
+      if (!shouldProceed) {
+        console.log(`Workflow aborted: Campaign ${campaignId} is no longer scheduled (likely started manually).`)
+        return
+      }
+    }
 
     // Step 1: Mark campaign as SENDING in Turso
     await context.run('init-campaign', async () => {
