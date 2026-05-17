@@ -418,6 +418,20 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
     );
   }, [availableTemplates, templateSearch, selectedTemplateId]);
 
+  // Tag Filtering for Specific Contacts
+  const [tagFilter, setTagFilter] = useState<string>('ALL');
+  
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>();
+    allContacts.forEach(c => c.tags?.forEach(t => tags.add(t)));
+    return Array.from(tags).sort();
+  }, [allContacts]);
+
+  const filteredSpecificContacts = useMemo(() => {
+    if (tagFilter === 'ALL') return allContacts;
+    return allContacts.filter(c => c.tags?.includes(tagFilter));
+  }, [allContacts, tagFilter]);
+
   // Hook must be called before any conditional returns
   const { rate: exchangeRate, hasRate } = useExchangeRate();
 
@@ -438,20 +452,6 @@ export const CampaignWizardView: React.FC<CampaignWizardViewProps> = ({
     { number: 2, title: 'Público' },
     { number: 3, title: 'Revisão & Lançamento' },
   ];
-
-  // Tag Filtering for Specific Contacts
-  const [tagFilter, setTagFilter] = useState<string>('ALL');
-  
-  const availableTags = useMemo(() => {
-    const tags = new Set<string>();
-    allContacts.forEach(c => c.tags?.forEach(t => tags.add(t)));
-    return Array.from(tags).sort();
-  }, [allContacts]);
-
-  const filteredSpecificContacts = useMemo(() => {
-    if (tagFilter === 'ALL') return allContacts;
-    return allContacts.filter(c => c.tags?.includes(tagFilter));
-  }, [allContacts, tagFilter]);
 
   const handleSelectAllFiltered = () => {
     const filteredIds = filteredSpecificContacts.map(c => c.id);
