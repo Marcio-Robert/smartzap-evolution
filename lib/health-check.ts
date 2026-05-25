@@ -1,5 +1,5 @@
 import { redis, isRedisAvailable } from '@/lib/redis'
-import { getWhatsAppCredentials, getCredentialsSource } from '@/lib/whatsapp-credentials'
+import { getEvoConfig, checkInstanceStatus } from '@/lib/evo-client'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 // Types for health check response
@@ -21,10 +21,10 @@ export interface HealthStatus {
             status: 'ok' | 'error' | 'not_configured'
             message?: string
         }
-        whatsapp: {
+        evolution: {
             status: 'ok' | 'error' | 'not_configured'
-            source?: 'redis' | 'env' | 'none'
-            phoneNumber?: string
+            instanceName?: string
+            state?: string
             message?: string
         }
     }
@@ -37,7 +37,7 @@ export interface HealthStatus {
 }
 
 interface HealthCheckOptions {
-    checkExternal?: boolean // If true, pings Meta API.
+    checkExternal?: boolean // If true, pings EVO API.
     checkPing?: boolean     // If true, pings DB/Redis. If false, just checks config.
 }
 
@@ -75,7 +75,7 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
             database: { status: 'not_configured', provider: 'none' },
             redis: { status: 'not_configured' },
             qstash: { status: 'not_configured' },
-            whatsapp: { status: 'not_configured' },
+            evolution: { status: 'not_configured' },
         },
         vercel: {
             dashboardUrl,
@@ -90,7 +90,6 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
         if (checkPing) {
             try {
                 const start = Date.now()
-                // Use a lighter query or cached reference if possible, but for ping we need a real request
                 const { error } = await supabase.from('settings').select('key').limit(1)
                 const latency = Date.now() - start
 
@@ -113,15 +112,12 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
                 result.overall = 'unhealthy'
             }
         } else {
-            // Shallow check
             result.services.database = {
                 status: 'ok',
                 provider: 'supabase',
                 message: 'Supabase configured',
             }
         }
-    } else {
-        // ... (not configured)
     }
 
     // 2. Check Redis
@@ -144,7 +140,6 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
                 result.overall = 'degraded'
             }
         } else {
-            // Shallow check
             result.services.redis = {
                 status: 'ok',
                 message: 'Redis configured',
@@ -179,54 +174,48 @@ export async function getHealthStatus(options: HealthCheckOptions = { checkExter
         result.overall = 'degraded'
     }
 
-    // 4. Check WhatsApp credentials
+    // 4. Check EVOlution API
     try {
-        const source = await getCredentialsSource()
-        const credentials = await getWhatsAppCredentials()
+        const config = getEvoConfig()
 
-        if (credentials) {
-            if (options.checkExternal) {
-                // Test connection to Meta API (Slow!)
-                const testUrl = `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=display_phone_number`
-                const response = await fetch(testUrl, {
-                    headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
-                })
+        if (config) {
+            if (checkExternal) {
+                // Test connection to EVO instance
+                const status = await checkInstanceStatus(config)
 
-                if (response.ok) {
-                    const data = await response.json()
-                    result.services.whatsapp = {
+                if (status.connected) {
+                    result.services.evolution = {
                         status: 'ok',
-                        source,
-                        phoneNumber: data.display_phone_number,
-                        message: `Connected: ${data.display_phone_number}`,
+                        instanceName: config.instanceName,
+                        state: status.state,
+                        message: `Conectado: ${config.instanceName} (${status.state})`,
                     }
                 } else {
-                    const error = await response.json()
-                    result.services.whatsapp = {
+                    result.services.evolution = {
                         status: 'error',
-                        source,
-                        message: error.error?.message || 'Token invalid or expired',
+                        instanceName: config.instanceName,
+                        state: status.state,
+                        message: status.error || `Instância ${config.instanceName} não conectada`,
                     }
                     result.overall = 'degraded'
                 }
             } else {
-                // Fast check: just confirm we have credentials
-                result.services.whatsapp = {
+                // Fast check: just confirm we have config
+                result.services.evolution = {
                     status: 'ok',
-                    source,
-                    message: 'Credentials configured (checked locally)',
+                    instanceName: config.instanceName,
+                    message: 'EVOlution API configurada (verificação local)',
                 }
             }
         } else {
-            result.services.whatsapp = {
+            result.services.evolution = {
                 status: 'not_configured',
-                source: 'none',
-                message: 'WhatsApp credentials not configured',
+                message: 'EVO_API_URL, EVO_API_KEY ou EVO_INSTANCE_NAME não configurados',
             }
             result.overall = 'unhealthy'
         }
     } catch (error) {
-        result.services.whatsapp = {
+        result.services.evolution = {
             status: 'error',
             message: error instanceof Error ? error.message : 'Unknown error',
         }

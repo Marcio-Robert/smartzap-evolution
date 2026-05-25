@@ -1,10 +1,9 @@
-import { Campaign, Contact, CampaignStatus, ContactStatus, AppSettings, Message, MessageStatus, Template, TemplateStatus } from '../types';
+import { Campaign, Contact, CampaignStatus, ContactStatus, AppSettings, Message, MessageStatus } from '../types';
 
 const KEYS = {
   CAMPAIGNS: 'smartzap_campaigns',
   CONTACTS: 'smartzap_contacts',
   SETTINGS: 'smartzap_settings',
-  TEMPLATES: 'smartzap_templates',
 };
 
 // Mapa de migração: valores antigos em inglês → novos em português
@@ -51,15 +50,13 @@ export const initStorage = () => {
   if (!localStorage.getItem(KEYS.CONTACTS)) {
     set(KEYS.CONTACTS, []);
   }
-  if (!localStorage.getItem(KEYS.TEMPLATES)) {
-    set(KEYS.TEMPLATES, []);
-  }
+
   // Initialize default settings if not present
   if (!localStorage.getItem(KEYS.SETTINGS)) {
     set(KEYS.SETTINGS, {
-      phoneNumberId: '',
-      businessAccountId: '',
-      accessToken: '',
+      evoApiUrl: '',
+      evoApiKey: '',
+      evoInstanceName: '',
       isConnected: false
     });
   }
@@ -69,7 +66,6 @@ export const initStorage = () => {
 export const clearAllData = () => {
   localStorage.removeItem(KEYS.CAMPAIGNS);
   localStorage.removeItem(KEYS.CONTACTS);
-  localStorage.removeItem(KEYS.TEMPLATES);
   localStorage.removeItem(KEYS.SETTINGS);
   initStorage();
 };
@@ -300,68 +296,13 @@ export const storage = {
     }
   },
 
-  templates: {
-    getAll: (): Template[] => get<Template[]>(KEYS.TEMPLATES, []),
 
-    add: (template: Omit<Template, 'id' | 'status' | 'lastUpdated' | 'preview'>) => {
-      const templates = get<Template[]>(KEYS.TEMPLATES, []);
-      const newTemplate: Template = {
-        ...template,
-        id: generateId(),
-        status: 'PENDING', // Created by AI/User is pending approval
-        lastUpdated: new Date().toISOString().split('T')[0],
-        preview: template.content.replace('{{1}}', 'Ana')
-      };
-      set(KEYS.TEMPLATES, [newTemplate, ...templates]);
-      return newTemplate;
-    },
-
-    // Simulate syncing with Meta API
-    sync: (): Promise<number> => {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          const current = get<Template[]>(KEYS.TEMPLATES, []);
-          const newTemplate: Template = {
-            id: `new_template_${Date.now()}`,
-            name: `Promoção Sincronizada ${new Date().toLocaleTimeString()}`,
-            category: 'MARKETING',
-            language: 'pt_BR',
-            status: 'APPROVED',
-            content: 'Nova oferta imperdível chegou para você, {{1}}! Confira agora.',
-            preview: 'Nova oferta imperdível chegou para você, Ana! Confira agora.',
-            lastUpdated: new Date().toISOString().split('T')[0]
-          };
-          set(KEYS.TEMPLATES, [newTemplate, ...current]);
-          resolve(1);
-        }, 2000);
-      });
-    }
-  },
-
-  // AI - Real Backend Connection (no fallbacks)
-  ai: {
-    generateTemplate: async (prompt: string): Promise<string> => {
-      const response = await fetch('/api/ai/generate-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || 'Falha ao gerar conteúdo com IA');
-      }
-
-      const data = await response.json();
-      return data.content;
-    }
-  },
 
   settings: {
     get: (): AppSettings => get<AppSettings>(KEYS.SETTINGS, {
-      phoneNumberId: '',
-      businessAccountId: '',
-      accessToken: '',
+      evoApiUrl: '',
+      evoApiKey: '',
+      evoInstanceName: '',
       isConnected: false
     }),
     save: (settings: AppSettings) => set(KEYS.SETTINGS, settings)

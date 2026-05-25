@@ -11,9 +11,7 @@ import {
     Contact,
     CampaignStatus,
     ContactStatus,
-    Template,
-    TemplateCategory,
-    TemplateStatus,
+
     AppSettings,
     Bot,
     BotStatus,
@@ -35,9 +33,7 @@ import {
     ToolExecutionStatus,
     FlowExecution,
     NodeExecution,
-    TemplateProject,
-    TemplateProjectItem,
-    CreateTemplateProjectDTO,
+
 } from '../types'
 
 // Generate a simple ID (same as turso-db.ts for compatibility)
@@ -60,8 +56,7 @@ export const campaignDb = {
             id: row.id,
             name: row.name,
             status: row.status as CampaignStatus,
-            templateName: row.template_name,
-            templateVariables: row.template_variables as string[] | undefined,
+            campaignText: row.campaign_text,
             recipients: row.total_recipients,
             sent: row.sent,
             delivered: row.delivered,
@@ -87,8 +82,7 @@ export const campaignDb = {
             id: data.id,
             name: data.name,
             status: data.status as CampaignStatus,
-            templateName: data.template_name,
-            templateVariables: data.template_variables as string[] | undefined,
+            campaignText: data.campaign_text,
             recipients: data.total_recipients,
             sent: data.sent,
             delivered: data.delivered,
@@ -103,7 +97,7 @@ export const campaignDb = {
 
     create: async (campaign: {
         name: string
-        templateName: string
+        campaignText: string
         recipients: number
         scheduledAt?: string
         templateVariables?: string[]
@@ -118,8 +112,7 @@ export const campaignDb = {
                 id,
                 name: campaign.name,
                 status,
-                template_name: campaign.templateName,
-                template_variables: campaign.templateVariables,
+                campaign_text: campaign.campaignText,
                 total_recipients: campaign.recipients,
                 sent: 0,
                 delivered: 0,
@@ -138,8 +131,7 @@ export const campaignDb = {
             id,
             name: campaign.name,
             status,
-            templateName: campaign.templateName,
-            templateVariables: campaign.templateVariables,
+            campaignText: campaign.campaignText,
             recipients: campaign.recipients,
             sent: 0,
             delivered: 0,
@@ -173,7 +165,7 @@ export const campaignDb = {
                 id: newId,
                 name: `${original.name} (Cópia)`,
                 status: CampaignStatus.DRAFT,
-                template_name: original.templateName,
+                campaign_text: original.campaignText,
                 total_recipients: original.recipients,
                 sent: 0,
                 delivered: 0,
@@ -538,48 +530,7 @@ export const campaignContactDb = {
 // TEMPLATES
 // ============================================================================
 
-export const templateDb = {
-    getAll: async (): Promise<Template[]> => {
-        const { data, error } = await supabase
-            .from('templates')
-            .select('*')
-            .order('created_at', { ascending: false })
 
-        if (error) throw error
-
-        return (data || []).map(row => ({
-            id: row.id,
-            name: row.name,
-            category: (row.category as TemplateCategory) || 'MARKETING',
-            language: row.language,
-            status: (row.status as TemplateStatus) || 'PENDING',
-            content: row.components,
-            preview: '',
-            lastUpdated: row.updated_at || row.created_at,
-        }))
-    },
-
-    upsert: async (template: Template): Promise<void> => {
-        const now = new Date().toISOString()
-
-        const { error } = await supabase
-            .from('templates')
-            .upsert({
-                id: template.id,
-                name: template.name,
-                category: template.category,
-                language: template.language,
-                status: template.status,
-                components: typeof template.content === 'string'
-                    ? JSON.parse(template.content)
-                    : template.content,
-                created_at: now,
-                updated_at: now,
-            }, { onConflict: 'name' })
-
-        if (error) throw error
-    },
-}
 
 // ============================================================================
 // SETTINGS
@@ -624,17 +575,17 @@ export const settingsDb = {
             })
 
         return {
-            phoneNumberId: settings.phoneNumberId || '',
-            businessAccountId: settings.businessAccountId || '',
-            accessToken: settings.accessToken || '',
+            evoApiUrl: settings.evoApiUrl || '',
+            evoApiKey: settings.evoApiKey || '',
+            evoInstanceName: settings.evoInstanceName || '',
             isConnected: settings.isConnected === 'true',
         }
     },
 
     saveAll: async (settings: AppSettings): Promise<void> => {
-        await settingsDb.set('phoneNumberId', settings.phoneNumberId)
-        await settingsDb.set('businessAccountId', settings.businessAccountId)
-        await settingsDb.set('accessToken', settings.accessToken)
+        await settingsDb.set('evoApiUrl', settings.evoApiUrl)
+        await settingsDb.set('evoApiKey', settings.evoApiKey)
+        await settingsDb.set('evoInstanceName', settings.evoInstanceName)
         await settingsDb.set('isConnected', settings.isConnected ? 'true' : 'false')
     },
 }
@@ -706,7 +657,7 @@ export const botDb = {
         return (data || []).map(row => ({
             id: row.id,
             name: row.name,
-            phoneNumberId: row.phone_number_id,
+            evoInstanceName: row.evo_instance_name,
             flowId: row.flow_id,
             status: row.status as BotStatus,
             welcomeMessage: row.welcome_message,
@@ -730,7 +681,6 @@ export const botDb = {
         return {
             id: data.id,
             name: data.name,
-            phoneNumberId: data.phone_number_id,
             flowId: data.flow_id,
             status: data.status as BotStatus,
             welcomeMessage: data.welcome_message,
@@ -742,11 +692,11 @@ export const botDb = {
         }
     },
 
-    getByPhoneNumberId: async (phoneNumberId: string): Promise<Bot | null> => {
+    getByEvoInstanceName: async (evoInstanceName: string): Promise<Bot | null> => {
         const { data, error } = await supabase
             .from('bots')
             .select('*')
-            .eq('phone_number_id', phoneNumberId)
+            .eq('evo_instance_name', evoInstanceName)
             .eq('status', 'active')
             .single()
 
@@ -755,7 +705,7 @@ export const botDb = {
         return {
             id: data.id,
             name: data.name,
-            phoneNumberId: data.phone_number_id,
+            evoInstanceName: data.evo_instance_name,
             flowId: data.flow_id,
             status: data.status as BotStatus,
             welcomeMessage: data.welcome_message,
@@ -769,7 +719,7 @@ export const botDb = {
 
     create: async (data: {
         name: string
-        phoneNumberId: string
+        evoInstanceName?: string
         welcomeMessage?: string
         fallbackMessage?: string
         sessionTimeoutMinutes?: number
@@ -783,12 +733,12 @@ export const botDb = {
             .insert({
                 id,
                 name: data.name,
-                phone_number_id: data.phoneNumberId,
                 status: 'draft',
                 welcome_message: data.welcomeMessage,
                 fallback_message: data.fallbackMessage,
                 session_timeout_minutes: data.sessionTimeoutMinutes || 30,
                 trigger_keywords: data.triggerKeywords,
+                evo_instance_name: data.evoInstanceName,
                 created_at: now,
                 updated_at: now,
             })
@@ -798,7 +748,7 @@ export const botDb = {
         return {
             id,
             name: data.name,
-            phoneNumberId: data.phoneNumberId,
+            evoInstanceName: data.evoInstanceName,
             status: 'draft',
             welcomeMessage: data.welcomeMessage,
             fallbackMessage: data.fallbackMessage,
@@ -813,7 +763,7 @@ export const botDb = {
         const updateData: Record<string, unknown> = {}
 
         if (data.name !== undefined) updateData.name = data.name
-        if (data.phoneNumberId !== undefined) updateData.phone_number_id = data.phoneNumberId
+        if (data.evoInstanceName !== undefined) updateData.evo_instance_name = data.evoInstanceName
         if (data.flowId !== undefined) updateData.flow_id = data.flowId
         if (data.status !== undefined) updateData.status = data.status
         if (data.welcomeMessage !== undefined) updateData.welcome_message = data.welcomeMessage
@@ -2008,109 +1958,4 @@ export const nodeExecutionDb = {
     },
 }
 
-// ============================================================================
-// TEMPLATE PROJECTS (Factory)
-// ============================================================================
-
-export const templateProjectDb = {
-    getAll: async (): Promise<TemplateProject[]> => {
-        const { data, error } = await supabase
-            .from('template_projects')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return data as TemplateProject[];
-    },
-
-    getById: async (id: string): Promise<TemplateProject & { items: TemplateProjectItem[] }> => {
-        // Fetch project
-        const { data: project, error: projectError } = await supabase
-            .from('template_projects')
-            .select('*')
-            .eq('id', id)
-            .single();
-
-        if (projectError) throw projectError;
-
-        // Fetch items
-        const { data: items, error: itemsError } = await supabase
-            .from('template_project_items')
-            .select('*')
-            .eq('project_id', id)
-            .order('created_at', { ascending: true });
-
-        if (itemsError) throw itemsError;
-
-        return { ...(project as TemplateProject), items: (items as TemplateProjectItem[]) || [] };
-    },
-
-    create: async (dto: CreateTemplateProjectDTO): Promise<TemplateProject> => {
-        // 1. Create Project
-        const { data: project, error: projectError } = await supabase
-            .from('template_projects')
-            .insert({
-                title: dto.title,
-                prompt: dto.prompt,
-                status: dto.status || 'draft',
-                template_count: dto.items.length,
-                approved_count: 0
-                // user_id is explicitly NOT set here, relying on schema default (null) or logic in API route if needed
-                // In this single-tenant app, user_id null is acceptable or could be 'admin'
-            })
-            .select()
-            .single();
-
-        if (projectError) throw projectError;
-
-        // 2. Create Items
-        if (dto.items.length > 0) {
-            const itemsToInsert = dto.items.map(item => ({
-                ...item,
-                project_id: project.id
-            }));
-
-            const { error: itemsError } = await supabase
-                .from('template_project_items')
-                .insert(itemsToInsert);
-
-            if (itemsError) {
-                console.error('Error creating items:', itemsError);
-                throw itemsError;
-            }
-        }
-
-        return project as TemplateProject;
-    },
-
-    delete: async (id: string): Promise<void> => {
-        const { error } = await supabase
-            .from('template_projects')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
-    },
-
-    updateItem: async (id: string, updates: Partial<TemplateProjectItem>): Promise<TemplateProjectItem> => {
-        const { data, error } = await supabase
-            .from('template_project_items')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data as TemplateProjectItem;
-    },
-
-    deleteItem: async (id: string): Promise<void> => {
-        const { error } = await supabase
-            .from('template_project_items')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
-    }
-};
 

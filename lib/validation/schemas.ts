@@ -186,9 +186,9 @@ export const contactFormSchema = z.object({
 // ============================================
 
 export const credentialsFormSchema = z.object({
-  wabaId: z.string().min(1, 'WABA ID é obrigatório'),
-  phoneNumberId: z.string().min(1, 'Phone Number ID é obrigatório'),
-  accessToken: z.string().min(50, 'Token deve ter pelo menos 50 caracteres'),
+  evoApiUrl: z.string().url('URL inválida').min(1, 'URL da API é obrigatória'),
+  evoApiKey: z.string().min(1, 'API Key é obrigatória'),
+  evoInstanceName: z.string().min(1, 'Nome da Instância é obrigatório'),
 });
 
 export const testContactFormSchema = z.object({

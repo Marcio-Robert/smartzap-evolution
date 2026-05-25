@@ -27,10 +27,11 @@ export interface SetupEnvVars {
   UPSTASH_API_KEY?: string
   UPSTASH_CONSOLE_URL?: string
 
-  // WhatsApp
-  WHATSAPP_TOKEN: string
-  WHATSAPP_PHONE_ID: string
-  WHATSAPP_BUSINESS_ACCOUNT_ID: string
+  // EVOlution API
+  EVO_API_URL: string
+  EVO_API_KEY: string
+  EVO_INSTANCE_NAME: string
+  N8N_WEBHOOK_LOGGER_URL?: string
 
   // Vercel (save for future use)
   VERCEL_TOKEN: string
@@ -72,9 +73,9 @@ export async function POST(request: NextRequest) {
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
       'QSTASH_TOKEN',
-      'WHATSAPP_TOKEN',
-      'WHATSAPP_PHONE_ID',
-      'WHATSAPP_BUSINESS_ACCOUNT_ID',
+      'EVO_API_URL',
+      'EVO_API_KEY',
+      'EVO_INSTANCE_NAME',
     ]
 
     const missingFields = requiredFields.filter(field => !envVars[field])

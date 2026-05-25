@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { MessageSquare, Zap, Image, Video, FileText, ExternalLink, Phone, Copy } from 'lucide-react';
-import { TemplateComponent, TemplateButton } from '../../types';
+
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -55,86 +55,23 @@ const BUTTON_ICONS: Record<string, React.ReactNode> = {
 // SUB-COMPONENTS
 // ============================================================================
 
-interface MessageButtonProps {
-  button: TemplateButton;
-}
 
-const MessageButton: React.FC<MessageButtonProps> = ({ button }) => (
-  <div className="bg-[#202c33] text-[#00a884] text-center py-2.5 rounded-lg shadow-sm text-[13px] font-medium cursor-pointer hover:bg-[#2a3942] transition-colors flex items-center justify-center gap-2">
-    {BUTTON_ICONS[button.type] || <Zap size={14} />}
-    {button.text}
-  </div>
-);
-
-interface MessageHeaderProps {
-  header: TemplateComponent;
-  variables?: string[];
-}
-
-const MessageHeader: React.FC<MessageHeaderProps> = ({ header, variables }) => {
-  switch (header.format) {
-    case 'TEXT':
-      if (!header.text) return null;
-      return (
-        <div className="bg-[#202c33] p-2 px-3 rounded-lg rounded-tl-none shadow-sm mb-1">
-          <p className="text-[13px] font-bold text-white">{replaceVariables(header.text, variables)}</p>
-        </div>
-      );
-    case 'IMAGE':
-      return (
-        <div className="bg-[#202c33] rounded-lg rounded-tl-none shadow-sm mb-1 overflow-hidden">
-          <div className="bg-zinc-700/50 h-32 flex items-center justify-center">
-            <Image size={32} className="text-zinc-500" />
-          </div>
-        </div>
-      );
-    case 'VIDEO':
-      return (
-        <div className="bg-[#202c33] rounded-lg rounded-tl-none shadow-sm mb-1 overflow-hidden">
-          <div className="bg-zinc-700/50 h-32 flex items-center justify-center">
-            <Video size={32} className="text-zinc-500" />
-          </div>
-        </div>
-      );
-    case 'DOCUMENT':
-      return (
-        <div className="bg-[#202c33] rounded-lg rounded-tl-none shadow-sm mb-1 p-3">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <FileText size={20} />
-            <span className="text-[12px]">Documento anexado</span>
-          </div>
-        </div>
-      );
-    default:
-      return null;
-  }
-};
 
 // ============================================================================
 // MESSAGE BUBBLE COMPONENT
 // ============================================================================
 
 interface MessageBubbleProps {
-  components?: TemplateComponent[];
   variables?: string[];
-  /** Fallback content when no components available */
   fallbackContent?: string;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
-  components,
   variables,
   fallbackContent
 }) => {
-  // Parse components
-  const header = components?.find(c => c.type === 'HEADER');
-  const body = components?.find(c => c.type === 'BODY');
-  const footer = components?.find(c => c.type === 'FOOTER');
-  const buttons = components?.find(c => c.type === 'BUTTONS');
-
-  // If no components but has fallback content, show just the body
-  const bodyText = body?.text || fallbackContent || 'Sem conteúdo';
-  const hasContent = components?.length || fallbackContent;
+  const bodyText = fallbackContent || 'Sem conteúdo';
+  const hasContent = !!fallbackContent;
 
   if (!hasContent) {
     return (
@@ -144,44 +81,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     );
   }
 
-  const hasButtons = buttons?.buttons && buttons.buttons.length > 0;
-
   return (
     <div className="animate-in zoom-in-95 slide-in-from-bottom-2 duration-500 max-w-[95%]">
-      {/* Header */}
-      {header && <MessageHeader header={header} variables={variables} />}
-
-      {/* Message Card (Body + Buttons united) */}
-      <div className={`bg-[#202c33] shadow-sm overflow-hidden ${hasButtons ? 'rounded-t-lg rounded-tl-none' : 'rounded-lg rounded-tl-none'}`}>
-        {/* Body */}
+      <div className="bg-[#202c33] shadow-sm overflow-hidden rounded-lg rounded-tl-none">
         <div className="p-3 text-[13px] leading-relaxed text-[#e9edef]">
           {replaceVariables(bodyText, variables)}
-
-          {/* Footer */}
-          {footer?.text && (
-            <p className="text-[11px] text-[#8696a0] mt-2 italic">{replaceVariables(footer.text, variables)}</p>
-          )}
-
           <div className="flex justify-end items-center gap-1 mt-1">
             <span className="text-[9px] text-[#8696a0]">10:42</span>
           </div>
         </div>
-
-        {/* Buttons (inside same card) */}
-        {hasButtons && buttons?.buttons && (
-          <div className="border-t border-[#111b21]">
-            {buttons.buttons.map((button, index) => (
-              <div
-                key={index}
-                className={`text-[#00a884] text-center py-2.5 text-[13px] font-medium cursor-pointer hover:bg-[#182229] transition-colors flex items-center justify-center gap-2 ${index < (buttons.buttons?.length ?? 0) - 1 ? 'border-b border-[#111b21]' : ''
-                  }`}
-              >
-                {BUTTON_ICONS[button.type] || <Zap size={14} />}
-                {button.text}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -192,8 +100,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 // ============================================================================
 
 interface WhatsAppPhonePreviewProps {
-  /** Template components (header, body, footer, buttons) */
-  components?: TemplateComponent[];
   /** Variables to replace in template. Index 0 = {{1}}, Index 1 = {{2}}, etc. */
   variables?: string[];
   /** Fallback content when no components available */
@@ -218,7 +124,6 @@ const SIZE_CONFIGS = {
 };
 
 export const WhatsAppPhonePreview: React.FC<WhatsAppPhonePreviewProps> = ({
-  components,
   variables,
   fallbackContent,
   businessName = 'SmartZap Business',
@@ -228,7 +133,7 @@ export const WhatsAppPhonePreview: React.FC<WhatsAppPhonePreviewProps> = ({
   className = '',
 }) => {
   const sizeConfig = SIZE_CONFIGS[size];
-  const hasContent = components?.length || fallbackContent;
+  const hasContent = !!fallbackContent;
 
   return (
     <div className={`relative mx-auto border-zinc-800 bg-zinc-950 ${sizeConfig.border} rounded-[2.5rem] ${sizeConfig.height} ${sizeConfig.width} ${sizeConfig.aspect} shadow-2xl flex flex-col overflow-hidden ${className}`}>
@@ -269,7 +174,6 @@ export const WhatsAppPhonePreview: React.FC<WhatsAppPhonePreviewProps> = ({
         {/* Message Content */}
         {hasContent ? (
           <MessageBubble
-            components={components}
             variables={variables}
             fallbackContent={fallbackContent}
           />
@@ -304,8 +208,6 @@ export const WhatsAppPhonePreview: React.FC<WhatsAppPhonePreviewProps> = ({
 // ============================================================================
 
 interface CompactPreviewProps {
-  /** Template components */
-  components?: TemplateComponent[];
   /** Variables for replacement */
   variables?: string[];
   /** Fallback content */
@@ -315,7 +217,6 @@ interface CompactPreviewProps {
 }
 
 export const CompactPreview: React.FC<CompactPreviewProps> = ({
-  components,
   variables,
   fallbackContent,
   className = '',
@@ -323,7 +224,6 @@ export const CompactPreview: React.FC<CompactPreviewProps> = ({
   return (
     <div className={`bg-[#0b141a] rounded-lg p-4 ${className}`}>
       <MessageBubble
-        components={components}
         variables={variables}
         fallbackContent={fallbackContent}
       />

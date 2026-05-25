@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export interface SetupStep {
-  id: 'redis' | 'qstash' | 'whatsapp';
+  id: 'redis' | 'qstash' | 'evolution';
   title: string;
   description: string;
   status: 'pending' | 'configured' | 'error';

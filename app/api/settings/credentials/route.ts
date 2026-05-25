@@ -1,51 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getEvoConfig, checkInstanceStatus } from '@/lib/evo-client'
 
-// Credentials are stored in environment variables (secrets)
-// No Redis dependency - env vars are the source of truth
+/**
+ * Settings Credentials API — SmartZap EVO
+ *
+ * Manages EVOlution API credentials stored in environment variables.
+ * Validates connection to the EVO instance.
+ */
 
-interface WhatsAppCredentials {
-  phoneNumberId: string
-  businessAccountId: string
-  accessToken: string
-  displayPhoneNumber?: string
-  verifiedName?: string
-}
-
-// GET - Fetch credentials from env (without exposing full token)
+// GET - Fetch EVO credentials from env (without exposing full API key)
 export async function GET() {
   try {
-    const phoneNumberId = process.env.WHATSAPP_PHONE_ID
-    const businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID
-    const accessToken = process.env.WHATSAPP_TOKEN
+    const config = getEvoConfig()
 
-    if (phoneNumberId && businessAccountId && accessToken) {
-      // Fetch display phone number from Meta API
+    if (config) {
+      // Check instance connection status
       let displayPhoneNumber: string | undefined
       let verifiedName: string | undefined
+      let instanceConnected = false
 
       try {
-        const metaResponse = await fetch(
-          `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=display_phone_number,verified_name`,
-          { headers: { 'Authorization': `Bearer ${accessToken}` } }
-        )
-        if (metaResponse.ok) {
-          const metaData = await metaResponse.json()
-          displayPhoneNumber = metaData.display_phone_number
-          verifiedName = metaData.verified_name
-        }
+        const status = await checkInstanceStatus(config)
+        instanceConnected = status.connected
+        // EVO instance state info
+        verifiedName = status.state || undefined
       } catch {
-        // Ignore errors, just won't have display number
+        // Ignore errors, just won't have status
       }
 
       return NextResponse.json({
         source: 'env',
-        phoneNumberId,
-        businessAccountId,
+        evoApiUrl: config.apiUrl,
+        evoInstanceName: config.instanceName,
+        evoApiKey: true, // Don't expose the key, just confirm it exists
         displayPhoneNumber,
         verifiedName,
         hasToken: true,
-        tokenPreview: '••••••••••',
-        isConnected: true,
+        isConnected: instanceConnected,
       })
     }
 
@@ -63,52 +54,46 @@ export async function GET() {
   }
 }
 
-// POST - Validate credentials (stored in env vars via setup wizard)
+// POST - Validate EVO credentials
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { phoneNumberId, businessAccountId, accessToken } = body
+    const { evoApiUrl, evoApiKey, evoInstanceName } = body
 
-    if (!phoneNumberId || !businessAccountId || !accessToken) {
+    if (!evoApiUrl || !evoApiKey || !evoInstanceName) {
       return NextResponse.json(
-        { error: 'Missing required fields: phoneNumberId, businessAccountId, accessToken' },
+        { error: 'Missing required fields: evoApiUrl, evoApiKey, evoInstanceName' },
         { status: 400 }
       )
     }
 
-    // Validate token by making a test call to Meta API
-    const testResponse = await fetch(
-      `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      }
-    )
+    // Validate by checking instance connection
+    const config = {
+      apiUrl: evoApiUrl.replace(/\/+$/, ''),
+      apiKey: evoApiKey,
+      instanceName: evoInstanceName,
+    }
 
-    if (!testResponse.ok) {
-      const error = await testResponse.json()
+    const status = await checkInstanceStatus(config)
+
+    if (!status.connected && status.error) {
       return NextResponse.json(
         {
-          error: 'Invalid credentials - Meta API rejected the token',
-          details: error.error?.message || 'Unknown error'
+          error: 'Não foi possível conectar à instância EVOlution',
+          details: status.error,
+          state: status.state,
         },
         { status: 401 }
       )
     }
 
-    const phoneData = await testResponse.json()
-
-    // Note: Credentials are stored in Vercel env vars via the setup wizard
-    // This endpoint only validates them
     return NextResponse.json({
       success: true,
-      phoneNumberId,
-      businessAccountId,
-      displayPhoneNumber: phoneData.display_phone_number,
-      verifiedName: phoneData.verified_name,
-      qualityRating: phoneData.quality_rating,
-      message: 'Credentials validated. Store them in environment variables.'
+      evoApiUrl: config.apiUrl,
+      evoInstanceName: config.instanceName,
+      state: status.state,
+      isConnected: status.connected,
+      message: 'Credenciais EVO validadas. Armazene-as nas variáveis de ambiente.',
     })
   } catch (error) {
     console.error('Error validating credentials:', error)
@@ -123,6 +108,6 @@ export async function POST(request: NextRequest) {
 export async function DELETE() {
   return NextResponse.json({
     success: true,
-    message: 'To remove credentials, update environment variables in Vercel dashboard.'
+    message: 'Para remover credenciais, atualize as variáveis de ambiente no dashboard Vercel.',
   })
 }

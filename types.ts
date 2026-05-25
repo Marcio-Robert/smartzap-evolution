@@ -1,7 +1,7 @@
 import React from 'react';
 
 // =============================================================================
-// CAMPAIGN & CONTACT TYPES (Existing)
+// CAMPAIGN & CONTACT TYPES (SmartZap EVO)
 // =============================================================================
 
 export enum CampaignStatus {
@@ -27,39 +27,6 @@ export enum MessageStatus {
   FAILED = 'Falhou'
 }
 
-export type TemplateCategory = 'MARKETING' | 'UTILIDADE' | 'AUTENTICACAO';
-export type TemplateStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
-
-export interface Template {
-  id: string;
-  name: string;
-  category: TemplateCategory;
-  language: string;
-  status: TemplateStatus;
-  content: string;
-  preview: string;
-  lastUpdated: string;
-  components?: TemplateComponent[]; // Full components from Meta API
-}
-
-export interface TemplateComponent {
-  type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
-  format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
-  text?: string;
-  buttons?: TemplateButton[];
-  example?: any;
-}
-
-export interface TemplateButton {
-  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE' | 'OTP' | 'FLOW' | 'CATALOG' | 'MPM' | 'VOICE_CALL';
-  text: string;
-  url?: string;
-  phone_number?: string;
-  example?: string[];
-  otp_type?: 'COPY_CODE' | 'ONE_TAP' | 'ZERO_TAP';
-  flow_id?: string;
-}
-
 export interface Campaign {
   id: string;
   name: string;
@@ -70,8 +37,7 @@ export interface Campaign {
   read: number;
   failed: number;
   createdAt: string;
-  templateName: string;
-  templateVariables?: string[];  // Dynamic template variables for {{2}}, {{3}}, etc.
+  campaignText: string;        // Texto livre da campanha (substituiu templateName)
   // Scheduling
   scheduledAt?: string;  // ISO timestamp for scheduled campaigns
   startedAt?: string;    // When campaign actually started sending
@@ -99,21 +65,24 @@ export interface Message {
   contactName: string;
   contactPhone: string;
   status: MessageStatus;
-  messageId?: string;      // WhatsApp message ID
+  messageId?: string;      // EVOlution message ID
   sentAt: string;
   deliveredAt?: string;    // Quando foi entregue
   readAt?: string;         // Quando foi lido
   error?: string;
 }
 
+// =============================================================================
+// EVO SETTINGS
+// =============================================================================
+
 export interface AppSettings {
-  phoneNumberId: string;
-  businessAccountId: string;
-  accessToken: string;
+  evoApiUrl: string;
+  evoApiKey: string;
+  evoInstanceName: string;
   isConnected: boolean;
-  displayPhoneNumber?: string;
-  qualityRating?: string;
-  verifiedName?: string;
+  displayPhoneNumber?: string;  // Número exibido (obtido da instância EVO)
+  verifiedName?: string;        // Nome verificado da instância
   testContact?: TestContact;
 }
 
@@ -130,87 +99,6 @@ export interface StatCardProps {
   icon: React.ReactNode;
 }
 
-// Template Workspace Types
-export type WorkspaceStatus = 'draft' | 'active' | 'archived';
-export type WorkspaceTemplateStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
-
-export interface TemplateWorkspace {
-  id: string;
-  name: string;
-  description?: string;
-  status: WorkspaceStatus;
-  createdAt: string;
-  updatedAt: string;
-  // Computed fields (from API)
-  templateCount?: number;
-  statusSummary?: {
-    draft: number;
-    submitted: number;
-    approved: number;
-    rejected: number;
-  };
-}
-
-export interface WorkspaceTemplate {
-  id: string;
-  workspaceId: string;
-  name: string;
-  content: string;
-  language: string;
-  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
-  status: WorkspaceTemplateStatus;
-  metaId?: string;
-  metaStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
-  rejectedReason?: string;
-  submittedAt?: string;
-  createdAt: string;
-  updatedAt?: string;
-  // Optional components from AI generator
-  components?: {
-    header?: { format: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'; text?: string };
-    footer?: { text: string };
-    buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
-  };
-}
-
-// =============================================================================
-// BATCH SUBMISSION TYPES (Factory)
-// =============================================================================
-
-export interface BatchSubmission {
-  id: string;
-  name: string; // e.g. "Aviso Aula 10/12"
-  createdAt: string;
-  status: 'processing' | 'completed' | 'partial_error';
-  // Stats snapshot
-  stats: {
-    total: number;
-    utility: number;
-    marketing: number;
-    poll_utility: number; // For "polling" check status
-    rejected: number;
-    pending: number;
-  };
-  templates: GeneratedTemplateWithStatus[];
-}
-
-export interface GeneratedTemplateWithStatus {
-  id: string;
-  name: string;
-  content: string;
-  category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'; // Current status
-  originalCategory: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'; // Intended status
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  metaStatus?: string; // Raw meta status
-  rejectionReason?: string;
-  generatedAt: string;
-  language: string;
-  // Components for preview
-  header?: { format: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'; text?: string };
-  footer?: { text: string };
-  buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
-}
-
 // =============================================================================
 // CHATBOT SYSTEM TYPES
 // =============================================================================
@@ -222,7 +110,7 @@ export type BotStatus = 'active' | 'inactive' | 'draft';
 export interface Bot {
   id: string;
   name: string;
-  phoneNumberId: string;
+  evoInstanceName?: string;
   flowId?: string;
   status: BotStatus;
   welcomeMessage?: string;
@@ -239,7 +127,7 @@ export interface Bot {
 // Flow Status
 export type FlowStatus = 'draft' | 'published';
 
-// Node Types
+// Node Types (removed 'template' — no longer applies)
 export type NodeType =
   | 'start'
   | 'message'
@@ -257,7 +145,6 @@ export type NodeType =
   | 'location'
   | 'carousel'
   | 'cta_url'
-  | 'template'
   | 'buttons'
   | 'list'
   | 'contacts'
@@ -454,7 +341,6 @@ export type BotMessageOrigin = 'client' | 'bot' | 'operator' | 'ai';
 export type BotMessageType =
   | 'text'
   | 'interactive'
-  | 'template'
   | 'image'
   | 'video'
   | 'audio'
@@ -663,13 +549,12 @@ export interface NodeExecution {
   createdAt: string;
 }
 
-// Extended NodeType to include new node types
+// Extended NodeType to include additional node types
 export type ExtendedNodeType = NodeType
   | 'sticker'
   | 'contacts'
   | 'buttons'
   | 'list'
-  | 'template'
   | 'reaction'
   | 'jump';
 
@@ -725,22 +610,6 @@ export interface ListNodeData extends BaseNodeData {
   }>;  // Max 10 sections
 }
 
-// Template Node Data
-export interface TemplateNodeData extends BaseNodeData {
-  templateName: string;
-  language: string;
-  headerParams?: Array<{
-    type: 'text' | 'image' | 'video' | 'document';
-    value: string;  // Variable name or URL
-  }>;
-  bodyParams?: string[];  // Variable names for {{1}}, {{2}}, etc.
-  buttonParams?: Array<{
-    index: number;
-    subType: 'url' | 'quick_reply';
-    value: string;
-  }>;
-}
-
 // Reaction Node Data
 export interface ReactionNodeData extends BaseNodeData {
   messageIdVariable?: string;  // Variable containing message ID to react to
@@ -772,9 +641,10 @@ export interface FlowEngineContext {
     timestamp: string;
   }>;
 
-  // WhatsApp credentials
-  phoneNumberId: string;
-  accessToken: string;
+  // EVO credentials (from env)
+  evoApiUrl: string;
+  evoApiKey: string;
+  evoInstanceName: string;
 
   // Current state
   currentNodeId?: string;
@@ -795,9 +665,7 @@ export type RealtimeTable =
   | 'bot_conversations'
   | 'bot_messages'
   | 'flows'
-  | 'flow_executions'
-  | 'template_projects'
-  | 'template_project_items';
+  | 'flow_executions';
 
 /**
  * Event types for Realtime subscriptions
@@ -842,41 +710,4 @@ export interface RealtimeState {
   isConnected: boolean;
   status: ChannelStatus | null;
   error?: string;
-}
-
-export type ProjectStatus = 'draft' | 'submitted' | 'completed';
-
-export interface TemplateProject {
-  id: string;
-  title: string;
-  prompt: string;
-  status: ProjectStatus;
-  template_count: number;
-  approved_count: number;
-  user_id?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface TemplateProjectItem {
-  id: string;
-  project_id: string;
-  name: string;
-  content: string;
-  meta_id?: string;
-  meta_status?: string;
-  header?: any;
-  footer?: any;
-  buttons?: any;
-  category?: string;
-  language: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateTemplateProjectDTO {
-  title: string;
-  prompt: string;
-  status?: string;
-  items: Omit<TemplateProjectItem, 'id' | 'project_id' | 'created_at' | 'updated_at'>[];
 }

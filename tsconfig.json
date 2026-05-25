@@ -39,6 +39,7 @@
     "node_modules",
     "pages",
     "dist-server",
-    "tmp"
+    "tmp",
+    "supabase"
   ]
 }

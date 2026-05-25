@@ -95,25 +95,25 @@ export async function setConversationVariable(conversationId: string, key: strin
 // RATE LIMITING
 // =============================================================================
 
-export async function checkPairRateLimit(phoneNumberId: string, recipientPhone: string): Promise<boolean> {
+export async function checkPairRateLimit(evoInstanceName: string, recipientPhone: string): Promise<boolean> {
   if (!redisClient) return true // Allow if Redis off
 
-  const key = `ratelimit:${phoneNumberId}:${recipientPhone}`
+  const key = `ratelimit:${evoInstanceName}:${recipientPhone}`
   const exists = await redis.exists(key)
   return exists === 0
 }
 
-export async function setPairRateLimit(phoneNumberId: string, recipientPhone: string): Promise<void> {
+export async function setPairRateLimit(evoInstanceName: string, recipientPhone: string): Promise<void> {
   if (!redisClient) return
 
-  const key = `ratelimit:${phoneNumberId}:${recipientPhone}`
+  const key = `ratelimit:${evoInstanceName}:${recipientPhone}`
   // 5 seconds rate limit between messages to same user
   await redis.set(key, '1', { ex: 5 })
 }
 
-export async function getPairRateLimitTTL(phoneNumberId: string, recipientPhone: string): Promise<number> {
+export async function getPairRateLimitTTL(evoInstanceName: string, recipientPhone: string): Promise<number> {
   if (!redisClient) return 0
-  const key = `ratelimit:${phoneNumberId}:${recipientPhone}`
+  const key = `ratelimit:${evoInstanceName}:${recipientPhone}`
   return await redis.ttl(key)
 }
 
@@ -121,32 +121,32 @@ export async function getPairRateLimitTTL(phoneNumberId: string, recipientPhone:
 // CSW (24h Customer Service Window)
 // =============================================================================
 
-export async function checkCSW(phoneNumberId: string, recipientPhone: string): Promise<boolean> {
+export async function checkCSW(evoInstanceName: string, recipientPhone: string): Promise<boolean> {
   if (!redisClient) return false
 
-  const key = `csw:${phoneNumberId}:${recipientPhone}`
+  const key = `csw:${evoInstanceName}:${recipientPhone}`
   const exists = await redis.exists(key)
   return exists === 1
 }
 
-export async function setCSW(phoneNumberId: string, recipientPhone: string): Promise<void> {
+export async function setCSW(evoInstanceName: string, recipientPhone: string): Promise<void> {
   if (!redisClient) return
 
-  const key = `csw:${phoneNumberId}:${recipientPhone}`
+  const key = `csw:${evoInstanceName}:${recipientPhone}`
   const now = new Date().toISOString()
   // 24 hours = 86400 seconds
   await redis.set(key, now, { ex: 86400 })
 }
 
-export async function getCSWStartTime(phoneNumberId: string, recipientPhone: string): Promise<string | null> {
+export async function getCSWStartTime(evoInstanceName: string, recipientPhone: string): Promise<string | null> {
   if (!redisClient) return null
-  const key = `csw:${phoneNumberId}:${recipientPhone}`
+  const key = `csw:${evoInstanceName}:${recipientPhone}`
   return await redis.get<string>(key)
 }
 
-export async function getCSWTimeRemaining(phoneNumberId: string, recipientPhone: string): Promise<number> {
+export async function getCSWTimeRemaining(evoInstanceName: string, recipientPhone: string): Promise<number> {
   if (!redisClient) return 0
-  const key = `csw:${phoneNumberId}:${recipientPhone}`
+  const key = `csw:${evoInstanceName}:${recipientPhone}`
   return await redis.ttl(key)
 }
 

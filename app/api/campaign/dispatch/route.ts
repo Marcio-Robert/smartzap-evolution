@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Client } from '@upstash/workflow'
-import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { isEvoConfigured } from '@/lib/evo-client'
 import { supabase } from '@/lib/supabase'
-import { flowDb } from '@/lib/supabase-db'
-
-import { ContactStatus } from '@/types'
 
 interface DispatchContact {
   phone: string
@@ -17,64 +14,23 @@ const generateId = () => Math.random().toString(36).substr(2, 9)
 // Trigger campaign dispatch workflow
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { campaignId, templateName, whatsappCredentials, templateVariables, flowId, scheduledAt } = body
+  const { campaignId, campaignText, scheduledAt } = body
   let { contacts } = body
 
-  // Fetch template language and components from database
-  let templateLanguage = 'pt_BR'
-  let templateComponents: any[] = []
-
-  try {
-    const { data: templateData } = await supabase
-      .from('templates')
-      .select('language, components')
-      .eq('name', templateName)
-      .single()
-      
-    if (templateData) {
-      if (templateData.language) templateLanguage = templateData.language
-      
-      if (templateData.components) {
-        // Parse components array. If it's a string, parse it first.
-        let comps = templateData.components
-        if (typeof comps === 'string') {
-          try { comps = JSON.parse(comps) } catch { comps = [] }
-        }
-        
-        if (Array.isArray(comps)) {
-          templateComponents = comps
-        }
-      }
-    }
-    console.log(`[Dispatch] Template: ${templateName}, Language: ${templateLanguage}, Components count: ${templateComponents.length}`)
-  } catch (err) {
-    console.error(`[Dispatch] Failed to fetch template data for ${templateName}`, err)
+  // Validate EVO configuration
+  if (!isEvoConfigured()) {
+    return NextResponse.json(
+      { error: 'EVOlution API não configurada. Defina EVO_API_URL, EVO_API_KEY e EVO_INSTANCE_NAME no .env.' },
+      { status: 401 }
+    )
   }
 
-  // Get template variables from campaign if not provided directly
-  let resolvedTemplateVariables: string[] = templateVariables || []
-  if (!resolvedTemplateVariables.length) {
-    const { data: campaign, error } = await supabase
-      .from('campaigns')
-      .select('template_variables')
-      .eq('id', campaignId)
-      .single()
-
-    if (campaign && campaign.template_variables) {
-      // Supabase JSONB columns return native JavaScript arrays, no JSON.parse needed
-      if (Array.isArray(campaign.template_variables)) {
-        resolvedTemplateVariables = campaign.template_variables
-      } else if (typeof campaign.template_variables === 'string') {
-        // Fallback for legacy string storage (should not happen with JSONB)
-        try {
-          resolvedTemplateVariables = JSON.parse(campaign.template_variables)
-        } catch {
-          console.error('[Dispatch] Failed to parse template_variables string:', campaign.template_variables)
-          resolvedTemplateVariables = []
-        }
-      }
-    }
-    console.log(`[Dispatch] Loaded template_variables from database:`, resolvedTemplateVariables)
+  // Validate campaign text
+  if (!campaignText || typeof campaignText !== 'string' || campaignText.trim().length === 0) {
+    return NextResponse.json(
+      { error: 'Texto da campanha é obrigatório.' },
+      { status: 400 }
+    )
   }
 
   // If no contacts provided, fetch from campaign_contacts (for cloned/scheduled campaigns)
@@ -122,55 +78,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Get credentials: Body (if valid) > Redis > Env
-  let phoneNumberId: string | undefined
-  let accessToken: string | undefined
-
-  // Try from body first (only if not masked)
-  if (whatsappCredentials?.phoneNumberId &&
-    whatsappCredentials?.accessToken &&
-    !whatsappCredentials.accessToken.includes('***')) {
-    phoneNumberId = whatsappCredentials.phoneNumberId
-    accessToken = whatsappCredentials.accessToken
-  }
-
-  // Fallback to Redis credentials
-  if (!phoneNumberId || !accessToken) {
-    const redisCredentials = await getWhatsAppCredentials()
-    if (redisCredentials) {
-      phoneNumberId = redisCredentials.phoneNumberId
-      accessToken = redisCredentials.accessToken
-    }
-  }
-
-  // Final fallback to env vars
-  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_ID
-  if (!accessToken) accessToken = process.env.WHATSAPP_TOKEN
-
-  if (!phoneNumberId || !accessToken) {
-    return NextResponse.json(
-      { error: 'Credenciais WhatsApp não configuradas. Configure em Configurações.' },
-      { status: 401 }
-    )
-  }
-
-  // =========================================================================
-  // FLOW ENGINE DISPATCH (if flowId is provided)
-  // =========================================================================
-
-  // =========================================================================
-  // FLOW ENGINE DISPATCH (Disabled in Template)
-  // =========================================================================
-
-  if (flowId) {
-    console.log('[Dispatch] Flow Engine is disabled in this template. Using legacy workflow.')
-    // Fallthrough to legacy workflow
-  }
-
-  // =========================================================================
-  // LEGACY WORKFLOW DISPATCH (for template-based campaigns)
-  // =========================================================================
-
   // Check if Upstash Workflow is configured
   if (!process.env.QSTASH_TOKEN) {
     return NextResponse.json(
@@ -181,8 +88,6 @@ export async function POST(request: NextRequest) {
 
   try {
     // Priority: NEXT_PUBLIC_APP_URL > VERCEL_PROJECT_PRODUCTION_URL > VERCEL_URL > localhost
-    // VERCEL_PROJECT_PRODUCTION_URL is auto-set by Vercel to the production domain (stable)
-    // VERCEL_URL changes with each deployment (not ideal for QStash callbacks)
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim())
       || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}` : null)
       || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : null)
@@ -191,19 +96,15 @@ export async function POST(request: NextRequest) {
     const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')
 
     console.log(`[Dispatch] Triggering workflow at: ${baseUrl}/api/campaign/workflow`)
-    console.log(`[Dispatch] Template variables: ${JSON.stringify(resolvedTemplateVariables)}`)
+    console.log(`[Dispatch] Campaign text: "${campaignText.substring(0, 60)}..."`)
     console.log(`[Dispatch] Is localhost: ${isLocalhost}`)
 
     const workflowPayload = {
       campaignId,
-      templateName,
-      templateLanguage,
-      templateComponents,
+      campaignText,
       contacts: contacts as DispatchContact[],
-      templateVariables: resolvedTemplateVariables,
-      phoneNumberId,
-      accessToken,
       scheduledAt,
+      // EVO credentials are read from process.env in the workflow (not transmitted)
     }
 
     if (isLocalhost) {

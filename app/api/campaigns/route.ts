@@ -32,7 +32,7 @@ export async function GET() {
 
 interface CreateCampaignBody {
   name: string
-  templateName: string
+  campaignText: string
   recipients: number
   scheduledAt?: string
   selectedContactIds?: string[]
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     // Create campaign with template variables
     const campaign = await campaignDb.create({
       name: data.name,
-      templateName: data.templateName,
+      campaignText: data.campaignText,
       recipients: data.recipients,
       scheduledAt: data.scheduledAt,
       templateVariables: data.templateVariables,  // Now properly validated by Zod

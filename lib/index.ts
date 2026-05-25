@@ -1,11 +1,8 @@
 /**
- * Lib Index
+ * Lib Index — SmartZap EVO
  *
  * Re-exports all utility modules for easier imports
  */
-
-// Rate Limiting
-export * from './rate-limiter';
 
 // Phone Validation & Formatting
 export * from './phone-formatter';
@@ -19,12 +16,6 @@ export * from './errors';
 // CSV Parsing
 export * from './csv-parser';
 
-// Template Validation
-export * from './template-validator';
-
-// Account Health Check
-export * from './account-health';
-
 // Event Sourcing Stats
 export * from './event-stats';
 
@@ -34,8 +25,8 @@ export * from './batch-webhooks';
 // Storage Validation (Zod)
 export * from './storage-validation';
 
-// WhatsApp Pricing
-export * from './whatsapp-pricing';
-
 // Storage
 export { storage, initStorage } from './storage';
+
+// EVOlution API Client
+export * from './evo-client';

@@ -3,13 +3,13 @@ import { AppSettings } from '../types';
 
 export const settingsService = {
   /**
-   * Get settings - combines local storage (UI state) with server credentials
+   * Get settings — combines local storage (UI state) with server EVO credentials
    */
   get: async (): Promise<AppSettings> => {
     // 1. Get local settings (UI state like testContact)
     const localSettings = storage.settings.get();
 
-    // 2. Get server credentials
+    // 2. Get server EVO credentials
     try {
       const response = await fetch('/api/settings/credentials');
       if (response.ok) {
@@ -17,13 +17,12 @@ export const settingsService = {
         if (serverData.isConnected) {
           return {
             ...localSettings,
-            phoneNumberId: serverData.phoneNumberId,
-            businessAccountId: serverData.businessAccountId,
+            evoApiUrl: serverData.evoApiUrl,
+            evoApiKey: serverData.evoApiKey ? '***configured***' : '',
+            evoInstanceName: serverData.evoInstanceName,
             displayPhoneNumber: serverData.displayPhoneNumber,
             verifiedName: serverData.verifiedName,
             isConnected: true,
-            // Don't expose full token to frontend
-            accessToken: serverData.hasToken ? '***configured***' : '',
           };
         }
       }
@@ -35,27 +34,26 @@ export const settingsService = {
   },
 
   /**
-   * Save settings - credentials go to server, UI state stays local
+   * Save settings — EVO credentials go to server, UI state stays local
    */
   save: async (settings: AppSettings): Promise<AppSettings> => {
     // 1. Save UI state locally (testContact, etc.)
     const uiSettings = {
       ...settings,
-      // Don't save credentials locally
-      accessToken: '',
+      evoApiKey: '', // Don't save API key locally
     };
     storage.settings.save(uiSettings);
 
     // 2. If we have real credentials, save to server
-    if (settings.accessToken && settings.accessToken !== '***configured***') {
+    if (settings.evoApiKey && settings.evoApiKey !== '***configured***') {
       try {
         const response = await fetch('/api/settings/credentials', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            phoneNumberId: settings.phoneNumberId,
-            businessAccountId: settings.businessAccountId,
-            accessToken: settings.accessToken,
+            evoApiUrl: settings.evoApiUrl,
+            evoApiKey: settings.evoApiKey,
+            evoInstanceName: settings.evoInstanceName,
           }),
         });
 
@@ -81,7 +79,7 @@ export const settingsService = {
   },
 
   /**
-   * Disconnect - remove credentials from server
+   * Disconnect — remove EVO credentials from server
    */
   disconnect: async (): Promise<void> => {
     try {
@@ -92,15 +90,11 @@ export const settingsService = {
   },
 
   /**
-   * Fetch phone details from Meta API
+   * Check EVO instance connection status
    */
-  fetchPhoneDetails: async (credentials: { phoneNumberId: string, accessToken: string }) => {
-    const response = await fetch('/api/settings/phone-number', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials)
-    });
-    if (!response.ok) throw new Error('Failed to fetch phone details');
+  checkConnection: async () => {
+    const response = await fetch('/api/settings/evo-status');
+    if (!response.ok) throw new Error('Failed to check EVO status');
     return response.json();
   },
 

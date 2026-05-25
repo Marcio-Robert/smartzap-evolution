@@ -59,7 +59,7 @@ export const CampaignSchema = z.object({
   delivered: z.number().min(0),
   read: z.number().min(0),
   createdAt: z.string(),
-  templateName: z.string(),
+  campaignText: z.string(),
 });
 
 export const ContactSchema = z.object({
@@ -82,9 +82,9 @@ export const MessageSchema = z.object({
 });
 
 export const AppSettingsSchema = z.object({
-  phoneNumberId: z.string(),
-  businessAccountId: z.string(),
-  accessToken: z.string(),
+  evoApiUrl: z.string(),
+  evoApiKey: z.string(),
+  evoInstanceName: z.string(),
   isConnected: z.boolean(),
   displayPhoneNumber: z.string().optional(),
   qualityRating: z.string().optional(),
@@ -189,9 +189,9 @@ export function validateTemplates(data: unknown): Template[] {
  */
 export function validateSettings(data: unknown): AppSettings {
   return validateOrDefault(AppSettingsSchema, data, {
-    phoneNumberId: '',
-    businessAccountId: '',
-    accessToken: '',
+    evoApiUrl: '',
+    evoApiKey: '',
+    evoInstanceName: '',
     isConnected: false,
   });
 }

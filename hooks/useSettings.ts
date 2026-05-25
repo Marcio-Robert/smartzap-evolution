@@ -3,27 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { settingsService } from '../services/settingsService';
 import { AppSettings } from '../types';
-import { useAccountLimits } from './useAccountLimits';
-import {
-  checkAccountHealth,
-  quickHealthCheck,
-  getHealthSummary,
-  type AccountHealth
-} from '../lib/account-health';
-import { Database, Zap, MessageSquare, Bot } from 'lucide-react';
+import { Database, Zap, MessageSquare } from 'lucide-react';
 import React from 'react';
 import { SetupStep } from '../components/features/settings/SetupWizardView';
-
-interface WebhookInfo {
-  webhookUrl: string;
-  webhookToken: string;
-  stats: {
-    lastEventAt: string | null;
-    todayDelivered: number;
-    todayRead: number;
-    todayFailed: number;
-  } | null;
-}
 
 // System health status
 interface HealthStatus {
@@ -38,14 +20,13 @@ interface HealthStatus {
       status: 'ok' | 'error' | 'not_configured';
       message?: string;
     };
-    whatsapp: {
+    evolution: {
       status: 'ok' | 'error' | 'not_configured';
-      source?: 'redis' | 'env' | 'none';
-      phoneNumber?: string;
+      instanceName?: string;
+      state?: string;
       message?: string;
     };
   };
-  // Vercel project info for dynamic linking
   vercel?: {
     dashboardUrl: string | null;
     storesUrl: string | null;
@@ -54,89 +35,21 @@ interface HealthStatus {
   timestamp: string;
 }
 
-// Phone number from Meta API
-export interface PhoneNumber {
-  id: string;
-  display_phone_number: string;
-  verified_name?: string;
-  quality_rating?: string;
-  webhook_configuration?: {
-    phone_number?: string;
-    whatsapp_business_account?: string;
-    application?: string;
-  };
-}
-
-// Domain option for webhook URL selection
-export interface DomainOption {
-  url: string;
-  source: string;
-  recommended: boolean;
-}
-
 export const useSettingsController = () => {
   const queryClient = useQueryClient();
 
-  // Account limits (tier, quality, etc.)
-  const {
-    limits: accountLimits,
-    refreshLimits,
-    tierName,
-    isError: limitsError,
-    errorMessage: limitsErrorMessage,
-    isLoading: limitsLoading,
-    hasLimits
-  } = useAccountLimits();
-
   // Local state for form
   const [formSettings, setFormSettings] = useState<AppSettings>({
-    phoneNumberId: '',
-    businessAccountId: '',
-    accessToken: '',
+    evoApiUrl: '',
+    evoApiKey: '',
+    evoInstanceName: '',
     isConnected: false
   });
-
-  // Account Health State
-  const [accountHealth, setAccountHealth] = useState<AccountHealth | null>(null);
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
 
   // --- Queries ---
   const settingsQuery = useQuery({
     queryKey: ['settings'],
     queryFn: settingsService.get,
-  });
-
-  // Webhook info query
-  const webhookQuery = useQuery({
-    queryKey: ['webhookInfo'],
-    queryFn: async (): Promise<WebhookInfo> => {
-      const response = await fetch('/api/webhook/info');
-      if (!response.ok) throw new Error('Failed to fetch webhook info');
-      return response.json();
-    },
-    enabled: !!settingsQuery.data?.isConnected, // Only fetch when connected
-    staleTime: 30 * 1000, // Cache for 30 seconds
-  });
-
-  // Phone numbers query (for webhook override management)
-  // Uses credentials from Redis - no need to pass from frontend
-  const phoneNumbersQuery = useQuery({
-    queryKey: ['phoneNumbers'],
-    queryFn: async (): Promise<PhoneNumber[]> => {
-      const response = await fetch('/api/phone-numbers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}), // Empty body - backend uses Redis credentials
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch phone numbers');
-      }
-      return response.json();
-    },
-    enabled: !!settingsQuery.data?.isConnected,
-    staleTime: 60 * 1000, // Cache for 1 minute
-    retry: false, // Don't retry on auth errors
   });
 
   // AI Settings Query
@@ -153,17 +66,6 @@ export const useSettingsController = () => {
     staleTime: 60 * 1000,
   });
 
-  // Available domains query (auto-detect from Vercel)
-  const domainsQuery = useQuery({
-    queryKey: ['availableDomains'],
-    queryFn: async (): Promise<{ domains: DomainOption[]; webhookPath: string; currentSelection: string | null }> => {
-      const response = await fetch('/api/settings/domains');
-      if (!response.ok) throw new Error('Failed to fetch domains');
-      return response.json();
-    },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
-  });
-
   // System status query (consolidated: health + usage + vercel info)
   const systemQuery = useQuery({
     queryKey: ['systemStatus'],
@@ -173,16 +75,14 @@ export const useSettingsController = () => {
       return response.json();
     },
     staleTime: 60 * 1000, // Cache for 1 minute
-    // No polling - user can manually refresh if needed
   });
 
-  // Backward compatible healthQuery accessor
   const healthQuery = {
     data: systemQuery.data?.health ? {
       ...systemQuery.data.health,
       vercel: systemQuery.data.vercel,
       timestamp: systemQuery.data.timestamp,
-    } : undefined,
+    } as HealthStatus : undefined,
     isLoading: systemQuery.isLoading,
   };
 
@@ -198,10 +98,11 @@ export const useSettingsController = () => {
     mutationFn: settingsService.save,
     onSuccess: (data) => {
       queryClient.setQueryData(['settings'], data);
-      toast.success('Configuração salva com sucesso!');
+      toast.success('Credenciais EVOlution salvas com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['systemStatus'] });
     },
-    onError: () => {
-      toast.error('Erro ao salvar configuração.');
+    onError: (error: any) => {
+      toast.error(error.message || 'Erro ao conectar à instância EVO.');
     }
   });
 
@@ -211,7 +112,6 @@ export const useSettingsController = () => {
       queryClient.invalidateQueries({ queryKey: ['aiSettings'] });
       toast.success('Configuração de IA salva com sucesso!');
     },
-    // Error is handled inline in the component
   });
 
   const removeAIMutation = useMutation({
@@ -248,36 +148,24 @@ export const useSettingsController = () => {
   });
 
   const handleSave = async () => {
-    // 1. Optimistic Update
-    const pendingSettings = { ...formSettings, isConnected: true };
-
-    try {
-      // 2. Fetch Real Data from Meta
-      const metaData = await settingsService.fetchPhoneDetails({
-        phoneNumberId: formSettings.phoneNumberId,
-        accessToken: formSettings.accessToken
-      });
-
-      // 3. Merge Data
-      const finalSettings = {
-        ...pendingSettings,
-        displayPhoneNumber: metaData.display_phone_number,
-        qualityRating: metaData.quality_rating,
-        verifiedName: metaData.verified_name
-      };
-
-      // 4. Save
-      saveMutation.mutate(finalSettings);
-    } catch (error) {
-      toast.error('Erro ao conectar com a Meta API. Verifique as credenciais.');
-      console.error(error);
-    }
+    saveMutation.mutate(formSettings);
   };
 
-  const handleDisconnect = () => {
-    const newSettings = { ...formSettings, isConnected: false };
-    saveMutation.mutate(newSettings);
-    setAccountHealth(null);
+  const handleDisconnect = async () => {
+    try {
+      await settingsService.disconnect();
+      setFormSettings({
+        evoApiUrl: '',
+        evoApiKey: '',
+        evoInstanceName: '',
+        isConnected: false
+      });
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['systemStatus'] });
+      toast.success('Desconectado. Atualize as variáveis no Vercel se necessário.');
+    } catch (e) {
+      toast.error('Erro ao desconectar.');
+    }
   };
 
   // Direct save settings (for test contact, etc.)
@@ -286,86 +174,7 @@ export const useSettingsController = () => {
     saveMutation.mutate(settings);
   };
 
-  // Check account health
-  const handleCheckHealth = async () => {
-    setIsCheckingHealth(true);
-    try {
-      const health = await checkAccountHealth();
-      setAccountHealth(health);
-
-      const summary = getHealthSummary(health);
-      if (health.isHealthy) {
-        toast.success(summary.title);
-      } else if (health.status === 'degraded') {
-        toast.warning(summary.title);
-      } else {
-        toast.error(summary.title);
-      }
-    } catch (error) {
-      toast.error('Erro ao verificar saúde da conta');
-    } finally {
-      setIsCheckingHealth(false);
-    }
-  };
-
-  // Quick health check (for pre-send validation)
-  const canSendCampaign = async (): Promise<{ canSend: boolean; reason?: string }> => {
-    return quickHealthCheck();
-  };
-
-  // Set webhook override for a phone number
-  const setWebhookOverride = async (phoneNumberId: string, callbackUrl: string): Promise<boolean> => {
-    try {
-      const response = await fetch(`/api/phone-numbers/${phoneNumberId}/webhook/override`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // accessToken is fetched from Redis on the server
-          callbackUrl,
-          verifyToken: webhookQuery.data?.webhookToken, // Use the auto-generated token
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        toast.error(error.error || 'Erro ao configurar webhook');
-        return false;
-      }
-
-      toast.success('Webhook configurado com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['phoneNumbers'] });
-      return true;
-    } catch (error) {
-      toast.error('Erro ao configurar webhook');
-      return false;
-    }
-  };
-
-  // Remove webhook override for a phone number
-  const removeWebhookOverride = async (phoneNumberId: string): Promise<boolean> => {
-    try {
-      // No body needed - server fetches credentials from Redis
-      const response = await fetch(`/api/phone-numbers/${phoneNumberId}/webhook/override`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        toast.error(error.error || 'Erro ao remover webhook');
-        return false;
-      }
-
-      toast.success('Webhook removido!');
-      queryClient.invalidateQueries({ queryKey: ['phoneNumbers'] });
-      return true;
-    } catch (error) {
-      toast.error('Erro ao remover webhook');
-      return false;
-    }
-  };
-
   // Build setup wizard steps based on health status
-  // Get Vercel stores URL dynamically from health check
   const setupSteps = useMemo((): SetupStep[] => {
     const health = healthQuery.data;
     const storesUrl = health?.vercel?.storesUrl;
@@ -403,30 +212,29 @@ export const useSettingsController = () => {
         isRequired: true,
       },
       {
-        id: 'whatsapp',
-        title: 'WhatsApp Business API',
-        description: 'Credenciais da Meta para enviar mensagens. Configure após Redis e QStash estarem prontos.',
-        status: health?.services.whatsapp.status === 'ok'
+        id: 'evolution',
+        title: 'EVOlution API',
+        description: 'Credenciais da sua instância EVO para disparo. Configure após Redis e QStash.',
+        status: health?.services.evolution.status === 'ok'
           ? 'configured'
-          : health?.services.whatsapp.status === 'error'
+          : health?.services.evolution.status === 'error'
             ? 'error'
             : 'pending',
-        icon: React.createElement(MessageSquare, { size: 20, className: 'text-green-400' }),
-        errorMessage: health?.services.whatsapp.message,
+        icon: React.createElement(MessageSquare, { size: 20, className: 'text-emerald-400' }),
+        errorMessage: health?.services.evolution.message,
         isRequired: true,
       },
     ];
   }, [healthQuery.data]);
 
-  // Check if setup is needed (any required step not configured)
+  // Check if setup is needed
   const needsSetup = useMemo(() => {
     const health = healthQuery.data;
-    if (!health) return false; // Don't show wizard while loading - show settings instead
+    if (!health) return false;
 
-    // Setup is needed if Redis, QStash OR WhatsApp are not configured
     return health.services.redis.status !== 'ok' ||
       health.services.qstash.status !== 'ok' ||
-      health.services.whatsapp.status !== 'ok';
+      health.services.evolution.status !== 'ok';
   }, [healthQuery.data]);
 
   // Check if infrastructure is ready (Redis + QStash configured)
@@ -437,13 +245,11 @@ export const useSettingsController = () => {
     return health.services.redis.status === 'ok' && health.services.qstash.status === 'ok';
   }, [healthQuery.data]);
 
-  // Check if all steps are configured
   const allConfigured = useMemo(() => {
     return setupSteps.every(step => step.status === 'configured');
   }, [setupSteps]);
 
   return {
-    // Settings with testContact merged from Supabase
     settings: {
       ...formSettings,
       testContact: testContactQuery.data || formSettings.testContact,
@@ -454,54 +260,30 @@ export const useSettingsController = () => {
     onSave: handleSave,
     onSaveSettings: handleSaveSettings,
     onDisconnect: handleDisconnect,
-    // Account limits
-    accountLimits,
-    refreshLimits,
-    tierName,
-    limitsError,
-    limitsErrorMessage,
-    limitsLoading,
-    hasLimits,
-    // Account health
-    accountHealth,
-    isCheckingHealth,
-    onCheckHealth: handleCheckHealth,
-    canSendCampaign,
-    getHealthSummary: accountHealth ? () => getHealthSummary(accountHealth) : null,
-    // Webhook info
-    webhookUrl: webhookQuery.data?.webhookUrl,
-    webhookToken: webhookQuery.data?.webhookToken,
-    webhookStats: webhookQuery.data?.stats,
-    // Phone numbers for webhook override
-    phoneNumbers: phoneNumbersQuery.data || [],
-    phoneNumbersLoading: phoneNumbersQuery.isLoading,
-    refreshPhoneNumbers: () => queryClient.invalidateQueries({ queryKey: ['phoneNumbers'] }),
-    setWebhookOverride,
-    removeWebhookOverride,
-    // Available domains for webhook URL
-    availableDomains: domainsQuery.data?.domains || [],
-    webhookPath: domainsQuery.data?.webhookPath || '/api/webhook',
-    selectedDomain: domainsQuery.data?.currentSelection || null,
+    
     // System health
     systemHealth: healthQuery.data || null,
     systemHealthLoading: healthQuery.isLoading,
-    refreshSystemHealth: () => queryClient.invalidateQueries({ queryKey: ['systemHealth'] }),
+    refreshSystemHealth: () => queryClient.invalidateQueries({ queryKey: ['systemStatus'] }),
+    
     // Setup wizard
     setupSteps,
     needsSetup,
     infrastructureReady,
     allConfigured,
+    
     // AI Settings
     aiSettings: aiSettingsQuery.data,
     aiSettingsLoading: aiSettingsQuery.isLoading,
     saveAIConfig: saveAIMutation.mutateAsync,
     removeAIKey: removeAIMutation.mutateAsync,
     isSavingAI: saveAIMutation.isPending,
-    // Test Contact - persisted in Supabase
+    
+    // Test Contact
     testContact: testContactQuery.data || null,
     testContactLoading: testContactQuery.isLoading,
     saveTestContact: saveTestContactMutation.mutateAsync,
     removeTestContact: removeTestContactMutation.mutateAsync,
     isSavingTestContact: saveTestContactMutation.isPending,
   };
-};  
+};

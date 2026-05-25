@@ -31,7 +31,7 @@ import { HealthStatus } from '@/lib/health-check'
 
 // Setup step interface
 interface SetupStep {
-    id: 'database' | 'redis' | 'qstash' | 'whatsapp'
+    id: 'database' | 'redis' | 'qstash' | 'evolution'
     title: string
     description: string
     status: 'pending' | 'configured' | 'error'
@@ -122,24 +122,24 @@ const OnboardingOverlay = ({
             helpUrl: 'https://upstash.com/docs/qstash/overall/getstarted',
         },
         {
-            id: 'whatsapp',
-            title: 'WhatsApp Business',
-            description: 'Credenciais da Meta',
-            status: health?.services.whatsapp.status === 'ok'
+            id: 'evolution',
+            title: 'EVOlution API',
+            description: 'Credenciais de Envio',
+            status: health?.services.evolution?.status === 'ok'
                 ? 'configured'
-                : health?.services.whatsapp.status === 'error'
+                : health?.services.evolution?.status === 'error'
                     ? 'error'
                     : 'pending',
             icon: React.createElement(MessageCircle, { size: 20, className: 'text-green-400' }),
-            errorMessage: health?.services.whatsapp.message,
+            errorMessage: health?.services.evolution?.message,
             isRequired: true,
-            actionLabel: 'Configurar WhatsApp',
-            actionUrl: '/setup',
+            actionLabel: 'Configurar EVOlution',
+            actionUrl: '/settings',
             instructions: [
-                'Configure as credenciais do WhatsApp Business.',
-                'Use o assistente para validar o token.',
+                'Configure as credenciais da EVOlution API.',
+                'Use o painel de Configurações para validar.',
             ],
-            helpUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api/get-started',
+            helpUrl: 'https://github.com/EvolutionAPI/evolution-api',
         },
     ]
 
@@ -350,7 +350,7 @@ const OnboardingOverlay = ({
 
                 {/* Bottom message */}
                 {
-                    infrastructureReady && steps.find(s => s.id === 'whatsapp')?.status !== 'configured' && (
+                    infrastructureReady && steps.find(s => s.id === 'evolution')?.status !== 'configured' && (
                         <div className="mt-8 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                             <div className="flex items-start gap-3">
                                 <div className="p-2 bg-amber-500/20 rounded-lg">
@@ -361,7 +361,7 @@ const OnboardingOverlay = ({
                                         Infraestrutura pronta!
                                     </h4>
                                     <p className="text-sm text-amber-200/70">
-                                        Redis e QStash estão configurados. Agora adicione suas credenciais do WhatsApp
+                                        Redis e QStash estão configurados. Agora adicione suas credenciais da EVOlution
                                         na página de configurações.
                                     </p>
                                     <Link
@@ -369,7 +369,7 @@ const OnboardingOverlay = ({
                                         prefetch={false}
                                         className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-medium rounded-lg transition-colors"
                                     >
-                                        Configurar WhatsApp
+                                        Configurar EVOlution
                                         <ChevronRight size={16} />
                                     </Link>
                                 </div>
@@ -406,13 +406,13 @@ const OnboardingOverlay = ({
                             <ExternalLink size={12} className="text-gray-500 ml-auto" />
                         </a>
                         <a
-                            href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                            href="https://github.com/EvolutionAPI/evolution-api"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 border border-white/10 rounded-xl text-sm text-gray-300 transition-colors"
                         >
                             <MessageCircle size={16} className="text-green-400" />
-                            Docs: WhatsApp Cloud API
+                            Docs: EVOlution API
                             <ExternalLink size={12} className="text-gray-500 ml-auto" />
                         </a>
                     </div>
@@ -423,7 +423,6 @@ const OnboardingOverlay = ({
 }
 
 import { PrefetchLink } from '@/components/ui/PrefetchLink'
-import { AccountAlertBanner } from '@/components/ui/AccountAlertBanner'
 
 interface SidebarItemProps {
     href: string
@@ -499,9 +498,6 @@ export function DashboardShell({
             case '/campaigns':
                 queryClient.prefetchQuery({ queryKey: ['campaigns'], staleTime: 15000 })
                 break
-            case '/templates':
-                queryClient.prefetchQuery({ queryKey: ['templates'], staleTime: Infinity })
-                break
             case '/contacts':
                 queryClient.prefetchQuery({ queryKey: ['contacts'], staleTime: 30000 })
                 break
@@ -542,7 +538,6 @@ export function DashboardShell({
         { path: '/campaigns', label: 'Campanhas', icon: MessageSquare },
         { path: '/workflows', label: 'Workflows', icon: Workflow, hidden: true }, // TODO: In development
         { path: '/conversations', label: 'Conversas', icon: MessageCircle, hidden: true },
-        { path: '/templates', label: 'Templates', icon: FileText },
         { path: '/contacts', label: 'Contatos', icon: Users },
         { path: '/settings', label: 'Configurações', icon: Settings },
     ].filter(item => !item.hidden)
@@ -555,7 +550,6 @@ export function DashboardShell({
         if (path === '/workflows') return 'Workflows'
         if (path === '/conversations') return 'Conversas'
         if (path.startsWith('/conversations/')) return 'Conversa'
-        if (path === '/templates') return 'Templates'
         if (path.startsWith('/contacts')) return 'Contatos'
         if (path.startsWith('/settings')) return 'Configurações'
         return 'App'
@@ -718,17 +712,16 @@ export function DashboardShell({
                 </header>
 
                 {/* Page Content */}
-                <main className={`flex-1 flex flex-col min-h-0 ${pathname?.includes('/campaigns/new') || (pathname?.includes('/templates/') && pathname !== '/templates')
+                <main className={`flex-1 flex flex-col min-h-0 ${pathname?.includes('/campaigns/new')
                     ? 'overflow-hidden'
                     : 'overflow-auto p-6 lg:p-10'
                     }`}>
                     <div className={
-                        pathname?.includes('/campaigns/new') || (pathname?.includes('/templates/') && pathname !== '/templates')
+                        pathname?.includes('/campaigns/new')
                             ? 'flex-1 min-h-0 flex flex-col'
                             : 'max-w-7xl mx-auto w-full'
                     }>
-                        {/* Account alerts banner - hide in fullscreen mode */}
-                        {!pathname?.includes('/campaigns/new') && <AccountAlertBanner />}
+                        {/* Account alerts banner - removed for EVO API */}
 
                         {children}
                     </div>

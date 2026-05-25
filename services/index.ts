@@ -1,6 +1,5 @@
 /**
- * Service Exports
- * 
+ * Service Exports — SmartZap EVO
  */
 
 // ============================================================================
@@ -9,8 +8,8 @@
 export { campaignService } from './campaignService';
 export { contactService } from './contactService';
 export { conversationService } from './conversationService';
-export { templateService } from './templateService';
+
 // ============================================================================
-// SETTINGS SERVICE (Uses Redis for credentials)
+// SETTINGS SERVICE
 // ============================================================================
 export { settingsService } from './settingsService';

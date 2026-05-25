@@ -2,12 +2,11 @@ import { Campaign, CampaignStatus, Message, MessageStatus } from '../types';
 
 interface CreateCampaignInput {
   name: string;
-  templateName: string;
+  campaignText: string;        // Texto livre da campanha
   recipients: number;
   selectedContacts?: { name: string; phone: string }[];
   selectedContactIds?: string[];  // For resume functionality
   scheduledAt?: string;           // ISO timestamp for scheduling
-  templateVariables?: string[];   // Dynamic template variables
 }
 
 interface RealMessageStatus {
@@ -16,20 +15,7 @@ interface RealMessageStatus {
   messageId?: string;
   error?: string;
   timestamp?: string;
-  sentAt?: string; // Alternativo ao timestamp
-  webhookStatus?: 'delivered' | 'read' | 'failed'; // From Meta webhook
-  webhookTimestamp?: string;
-}
-
-// Helper para extrair timestamp de forma segura
-function getTimestamp(msg: RealMessageStatus): string {
-  const ts = msg.timestamp || msg.sentAt;
-  if (!ts) return '-';
-  try {
-    return new Date(ts).toLocaleString('pt-BR');
-  } catch {
-    return '-';
-  }
+  sentAt?: string;
 }
 
 interface CampaignStatusResponse {
@@ -46,7 +32,6 @@ interface CampaignStatusResponse {
 
 export const campaignService = {
   getAll: async (): Promise<Campaign[]> => {
-    // Fetch from real API
     const response = await fetch('/api/campaigns');
     if (!response.ok) {
       console.error('Failed to fetch campaigns:', response.statusText);
@@ -56,7 +41,6 @@ export const campaignService = {
   },
 
   getById: async (id: string): Promise<Campaign | undefined> => {
-    // Fetch from Database (SOURCE OF TRUTH for persisted data)
     const response = await fetch(`/api/campaigns/${id}`);
     if (!response.ok) {
       if (response.status === 404) return undefined;
@@ -67,16 +51,13 @@ export const campaignService = {
     const campaign = await response.json();
 
     // Strategy: Use Redis for real-time stats while campaign is active
-    // Once completed, database is the source of truth
     const isActive = campaign.status === 'Enviando' || campaign.status === 'Agendado';
 
     if (isActive) {
-      // Try to get real-time stats from Redis for faster updates
       try {
         const statusResponse = await fetch(`/api/campaign/${id}/status`);
         if (statusResponse.ok) {
           const realStatus: CampaignStatusResponse = await statusResponse.json();
-          // Only use Redis stats if they have data (not empty)
           if (realStatus.stats.sent > 0 || realStatus.stats.failed > 0) {
             return {
               ...campaign,
@@ -92,13 +73,11 @@ export const campaignService = {
       }
     }
 
-    // For completed campaigns or if Redis fails, use database (source of truth)
     return campaign;
   },
 
   // INSTANT: Get pending messages - returns empty array (real data comes from getMessages)
   getPendingMessages: (_id: string): Message[] => {
-    // During creation, messages are pending. After dispatch, use getMessages() for real status.
     return [];
   },
 
@@ -136,7 +115,7 @@ export const campaignService = {
   },
 
   create: async (input: CreateCampaignInput): Promise<Campaign> => {
-    const { name, templateName, recipients, selectedContacts, selectedContactIds, scheduledAt, templateVariables } = input;
+    const { name, campaignText, recipients, selectedContacts, selectedContactIds, scheduledAt } = input;
 
     // 1. Create campaign in Database (source of truth) with contacts
     const response = await fetch('/api/campaigns', {
@@ -144,12 +123,11 @@ export const campaignService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
-        templateName,
+        campaignText,
         recipients,
         scheduledAt,
         selectedContactIds,
-        contacts: selectedContacts, // Pass contacts to be saved in campaign_contacts
-        templateVariables, // Pass template variables to be saved in database
+        contacts: selectedContacts,
         status: scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.SENDING,
       }),
     });
@@ -162,32 +140,28 @@ export const campaignService = {
 
     // 2. Dispatch to Backend (Execution or Scheduling)
     if (selectedContacts && selectedContacts.length > 0) {
-      await campaignService.dispatchToBackend(newCampaign.id, templateName, selectedContacts, templateVariables, scheduledAt);
+      await campaignService.dispatchToBackend(newCampaign.id, campaignText, selectedContacts, scheduledAt);
     }
 
     return newCampaign;
   },
 
   // Internal: dispatch campaign to backend queue
-  dispatchToBackend: async (campaignId: string, templateName: string, contacts?: { name: string; phone: string }[], templateVariables?: string[], scheduledAt?: string): Promise<boolean> => {
+  dispatchToBackend: async (campaignId: string, campaignText: string, contacts?: { name: string; phone: string }[], scheduledAt?: string): Promise<boolean> => {
     try {
-      // Use provided contacts - contacts must be passed explicitly
       if (!contacts || contacts.length === 0) {
         console.error('No contacts provided for dispatch');
         return false;
       }
 
-      // Don't send credentials from localStorage - server fetches from Redis
       const response = await fetch('/api/campaign/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           campaignId,
-          templateName,
+          campaignText,
           contacts,
-          templateVariables, // Pass template variables to workflow
-          scheduledAt, // Pass scheduledAt to workflow
-          // whatsappCredentials fetched from Redis on server
+          scheduledAt,
         })
       });
 
@@ -219,7 +193,6 @@ export const campaignService = {
 
   // Pause a running campaign
   pause: async (id: string): Promise<Campaign | undefined> => {
-    // Update Database first (source of truth)
     const updateResponse = await fetch(`/api/campaigns/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -236,7 +209,6 @@ export const campaignService = {
 
     const campaign = await updateResponse.json();
 
-    // Notify backend to pause queue processing
     try {
       await fetch(`/api/campaign/${id}/pause`, { method: 'POST' });
     } catch (error) {
@@ -248,11 +220,9 @@ export const campaignService = {
 
   // Resume a paused campaign
   resume: async (id: string): Promise<Campaign | undefined> => {
-    // Get campaign from Database
     const campaign = await campaignService.getById(id);
     if (!campaign) return undefined;
 
-    // Update status in Database
     const updateResponse = await fetch(`/api/campaigns/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -269,7 +239,6 @@ export const campaignService = {
 
     const updatedCampaign = await updateResponse.json();
 
-    // Notify backend to resume processing
     try {
       await fetch(`/api/campaign/${id}/resume`, { method: 'POST' });
     } catch (error) {
@@ -283,7 +252,6 @@ export const campaignService = {
   start: async (id: string): Promise<Campaign | undefined> => {
     console.log('🚀 Starting campaign:', { id });
 
-    // Get campaign from Database first to get templateVariables and templateName
     const campaignData = await campaignService.getById(id);
     if (!campaignData) {
       console.error('❌ Campaign not found!');
@@ -303,12 +271,11 @@ export const campaignService = {
     }
 
     if (contacts.length === 0) {
-      console.error('❌ No contacts found for campaign! Campaign will not be dispatched.');
+      console.error('❌ No contacts found for campaign!');
       return undefined;
     }
 
     console.log('📋 Found contacts:', contacts.length);
-    console.log('📝 Template variables:', campaignData.templateVariables);
 
     // Update status in Database
     const updateResponse = await fetch(`/api/campaigns/${id}`, {
@@ -332,9 +299,8 @@ export const campaignService = {
 
     const success = await campaignService.dispatchToBackend(
       id,
-      campaign.templateName,
-      contacts,
-      campaignData.templateVariables // Pass template variables from database
+      campaign.campaignText || campaignData.campaignText,
+      contacts
     );
 
     console.log('📤 Dispatch result:', success ? '✅ Success' : '❌ Failed');
@@ -347,13 +313,11 @@ export const campaignService = {
     const realStatus = await campaignService.getRealStatus(id);
 
     if (realStatus && realStatus.stats.total > 0) {
-      // Get campaign from Database
       const campaign = await campaignService.getById(id);
       if (!campaign) return undefined;
 
       const isComplete = realStatus.stats.sent + realStatus.stats.failed >= campaign.recipients;
 
-      // Update in Database
       const response = await fetch(`/api/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

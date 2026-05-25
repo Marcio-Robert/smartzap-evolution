@@ -6,8 +6,7 @@
 
 import { NextResponse } from 'next/server'
 import { botConversationDb, botMessageDb, botDb } from '@/lib/supabase-db'
-import { buildTextMessage } from '@/lib/whatsapp/text'
-import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import { getEvoConfig, sendText } from '@/lib/evo-client'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -51,7 +50,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       )
     }
 
-    // Buscar bot para obter phone_number_id
+    // Buscar bot
     const bot = await botDb.getById(conversation.botId)
     if (!bot) {
       return NextResponse.json(
@@ -60,49 +59,37 @@ export async function POST(request: Request, { params }: RouteParams) {
       )
     }
 
-    // Buscar credenciais do WhatsApp
-    const credentials = await getWhatsAppCredentials()
-    if (!credentials) {
+    // Configurações da EVO
+    const evoConfig = getEvoConfig()
+    if (!evoConfig) {
       return NextResponse.json(
-        { error: 'Credenciais do WhatsApp não configuradas' },
+        { error: 'EVOlution API não configurada' },
         { status: 500 }
       )
     }
 
-    // Construir payload da mensagem
-    const messagePayload = buildTextMessage({
-      to: conversation.contactPhone,
+    // Enviar via EVOlution API
+    const result = await sendText(evoConfig, {
+      number: conversation.contactPhone,
       text: text.trim(),
+      delay: 500, // delay curto para mensagens manuais
+      linkPreview: true,
     })
 
-    // Enviar via Meta API
-    const response = await fetch(
-      `https://graph.facebook.com/v24.0/${bot.phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${credentials.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messagePayload),
-      }
-    )
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      console.error('Erro ao enviar mensagem WhatsApp:', result)
+    if (!result.success) {
+      console.error('Erro ao enviar mensagem via EVO:', result.error)
       return NextResponse.json(
         {
           error: 'Erro ao enviar mensagem pelo WhatsApp',
-          details: result.error?.message || 'Erro desconhecido'
+          details: result.error || 'Erro desconhecido'
         },
-        { status: response.status }
+        { status: result.statusCode || 500 }
       )
     }
 
+    const waMessageId = result.messageId
+
     // Salvar mensagem no banco
-    const waMessageId = result.messages?.[0]?.id
     const savedMessage = await botMessageDb.create({
       conversationId: id,
       content: { text: text.trim() },

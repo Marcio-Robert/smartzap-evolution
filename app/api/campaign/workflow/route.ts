@@ -2,7 +2,8 @@ import { serve } from '@upstash/workflow/nextjs'
 import { campaignDb } from '@/lib/supabase-db'
 import { supabase } from '@/lib/supabase'
 import { CampaignStatus } from '@/types'
-import { getUserFriendlyMessage } from '@/lib/whatsapp-errors'
+import { getEvoConfig, sendText, randomDelay, formatDelay } from '@/lib/evo-client'
+import type { EvoConfig } from '@/lib/evo-client'
 
 interface Contact {
   phone: string
@@ -11,118 +12,12 @@ interface Contact {
 
 interface CampaignWorkflowInput {
   campaignId: string
-  templateName: string
-  templateLanguage?: string
-  templateComponents?: any[]
+  campaignText: string       // Texto livre da campanha
   contacts: Contact[]
-  templateVariables?: string[]  // Static values for {{2}}, {{3}}, etc.
-  phoneNumberId: string
-  accessToken: string
   scheduledAt?: string
 }
 
-/**
- * Build template components (Header, Body, Buttons) by mapping UI variables
- * to the correct parameters expected by Meta API.
- */
-function buildMetaComponents(contactName: string, templateVariables: string[], templateComponents?: any[]): any[] {
-  if (!templateComponents || templateComponents.length === 0) {
-    // Fallback if no components were passed
-    const parameters = [{ type: 'text', text: contactName || 'Cliente' }]
-    for (const val of templateVariables) {
-      parameters.push({ type: 'text', text: val || '' })
-    }
-    return [{ type: 'body', parameters }]
-  }
-
-  const resultComponents: any[] = []
-  
-  // Calculate how many body variables and build body parameters in order
-  const bodyComponent = templateComponents.find(c => c.type === 'BODY')
-  let bodyVarsCount = 0
-  const bodyParameters: any[] = []
-  
-  if (bodyComponent?.text) {
-    const matches = bodyComponent.text.match(/\{\{([^}]+)\}\}/g) || []
-    matches.forEach((m: string) => {
-      const varName = m.replace(/[{}]/g, '')
-      const isNamed = isNaN(Number(varName))
-      const isContactName = varName === '1' || varName.toLowerCase() === 'nome' || varName.toLowerCase() === 'cliente'
-      
-      let finalName = contactName || 'Cliente'
-      if (finalName.toLowerCase() === 'desconhecido' || finalName.toLowerCase() === 'sem nome') {
-        finalName = 'Cliente'
-      }
-      
-      const param: any = { type: 'text', text: isContactName ? finalName : (templateVariables[bodyVarsCount] || '') }
-      if (isNamed) param.parameter_name = varName
-      
-      bodyParameters.push(param)
-      if (!isContactName) bodyVarsCount++
-    })
-  }
-
-  if (bodyParameters.length > 0) {
-    resultComponents.push({ type: 'body', parameters: bodyParameters })
-  }
-
-  // Header variables count
-  const headerComponent = templateComponents.find(c => c.type === 'HEADER')
-  let headerVarsCount = 0
-  if (headerComponent?.format === 'TEXT' && headerComponent?.text) {
-    const matches = headerComponent.text.match(/\{\{([^}]+)\}\}/g) || []
-    
-    if (matches.length > 0) {
-      const headerParameters: any[] = []
-      matches.forEach((m: string) => {
-        const varName = m.replace(/[{}]/g, '')
-        const isNamed = isNaN(Number(varName))
-        const val = templateVariables[bodyVarsCount + headerVarsCount] || ''
-        
-        const param: any = { type: 'text', text: val }
-        if (isNamed) param.parameter_name = varName
-        
-        headerParameters.push(param)
-        headerVarsCount++
-      })
-      resultComponents.push({ type: 'header', parameters: headerParameters })
-    }
-  }
-
-  // Build Button Parameters
-  const buttonsComponent = templateComponents.find(c => c.type === 'BUTTONS')
-  if (buttonsComponent?.buttons) {
-    let buttonVarIndexOffset = bodyVarsCount + headerVarsCount
-    buttonsComponent.buttons.forEach((button: any, btnIdx: number) => {
-      if (button.type === 'URL' && button.url?.includes('{{')) {
-        const matches = button.url.match(/\{\{([^}]+)\}\}/g) || []
-        if (matches.length > 0) {
-          const buttonParams: any[] = []
-          matches.forEach((m: string) => {
-            const varName = m.replace(/[{}]/g, '')
-            const isNamed = isNaN(Number(varName))
-            const param: any = {
-              type: 'text',
-              text: templateVariables[buttonVarIndexOffset++] || ''
-            }
-            if (isNamed) param.parameter_name = varName
-            buttonParams.push(param)
-          })
-          resultComponents.push({
-            type: 'button',
-            sub_type: 'url',
-            index: btnIdx.toString(),
-            parameters: buttonParams
-          })
-        }
-      }
-    })
-  }
-
-  return resultComponents
-}
-
-// Update contact status in Turso
+// Update contact status in Supabase
 async function updateContactStatus(campaignId: string, phone: string, status: 'sent' | 'failed', messageId?: string, error?: string) {
   try {
     await supabase
@@ -144,12 +39,12 @@ async function updateContactStatus(campaignId: string, phone: string, status: 's
 // Each step is a separate HTTP request, bypasses Vercel 10s timeout
 export const { POST } = serve<CampaignWorkflowInput>(
   async (context) => {
-    const { campaignId, templateName, templateLanguage, templateComponents, contacts, templateVariables, phoneNumberId, accessToken, scheduledAt } = context.requestPayload
+    const { campaignId, campaignText, contacts, scheduledAt } = context.requestPayload
 
     // Step 0: If scheduled, wait until the scheduled time
     if (scheduledAt) {
       await context.sleepUntil('wait-for-schedule', new Date(scheduledAt))
-      
+
       // Verify campaign wasn't started manually or cancelled while sleeping
       const shouldProceed = await context.run('verify-status', async () => {
         const { data: campaign } = await supabase
@@ -157,30 +52,37 @@ export const { POST } = serve<CampaignWorkflowInput>(
           .select('status')
           .eq('id', campaignId)
           .single()
-          
+
         return campaign?.status === CampaignStatus.SCHEDULED
       })
-      
+
       if (!shouldProceed) {
-        console.log(`Workflow aborted: Campaign ${campaignId} is no longer scheduled (likely started manually).`)
+        console.log(`Workflow aborted: Campaign ${campaignId} is no longer scheduled.`)
         return
       }
     }
 
-    // Step 1: Mark campaign as SENDING in Turso
-    await context.run('init-campaign', async () => {
+    // Step 1: Validate EVO config and mark campaign as SENDING
+    const evoConfig = await context.run('init-campaign', async () => {
+      const config = getEvoConfig()
+      if (!config) {
+        throw new Error('EVOlution API não configurada. Defina EVO_API_URL, EVO_API_KEY e EVO_INSTANCE_NAME.')
+      }
+
       await campaignDb.updateStatus(campaignId, {
         status: CampaignStatus.SENDING,
         startedAt: new Date().toISOString()
       })
 
       console.log(`📊 Campaign ${campaignId} started with ${contacts.length} contacts`)
-      console.log(`📝 Template variables: ${JSON.stringify(templateVariables || [])}`)
+      console.log(`📝 Campaign text: "${campaignText.substring(0, 80)}..."`)
+
+      return config
     })
 
-    // Step 2: Process contacts in batches of 40
-    // Each batch is a separate step = separate HTTP request = bypasses 10s limit
-    const BATCH_SIZE = 40
+    // Step 2: Process contacts in batches of 10
+    // Smaller batches = more checkpoints = more resilient
+    const BATCH_SIZE = 10
     const batches: Contact[][] = []
 
     for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
@@ -208,77 +110,67 @@ export const { POST } = serve<CampaignWorkflowInput>(
               break
             }
 
-            // Send message via WhatsApp Cloud API
-            // Dynamically build components based on template blueprint
-            const components = buildMetaComponents(contact.name, templateVariables || [], templateComponents)
+            // ============================================
+            // ANTI-BAN DELAY (15-35 seconds between sends)
+            // ============================================
+            if (sentCount > 0 || batchIndex > 0) {
+              const delayMs = await randomDelay()
+              console.log(`⏳ Anti-ban delay: ${formatDelay(delayMs)}`)
+            }
 
-            const response = await fetch(
-              `https://graph.facebook.com/v24.0/${phoneNumberId}/messages`,
+            // ============================================
+            // SEND MESSAGE VIA EVOLUTION API
+            // ============================================
+            // Personalizar texto: substituir {{nome}} pelo nome do contato
+            let personalizedText = campaignText
+            const contactName = contact.name || 'Cliente'
+            personalizedText = personalizedText
+              .replace(/\{\{nome\}\}/gi, contactName)
+              .replace(/\{\{name\}\}/gi, contactName)
+              .replace(/\{\{1\}\}/g, contactName)
+
+            const result = await sendText(
+              evoConfig as EvoConfig,
               {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${accessToken}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  messaging_product: 'whatsapp',
-                  to: contact.phone,
-                  type: 'template',
-                  template: {
-                    name: templateName,
-                    language: { code: templateLanguage || 'pt_BR' },
-                    ...(components.length > 0 ? { components } : {}),
-                  },
-                }),
+                number: contact.phone,
+                text: personalizedText,
+                delay: 1200,
+                linkPreview: true,
               }
             )
 
-            const data = await response.json()
-
-            if (response.ok && data.messages?.[0]?.id) {
-              const messageId = data.messages[0].id
-
-              // Update contact status in Supabase (stores message_id for webhook lookup)
-              await updateContactStatus(campaignId, contact.phone, 'sent', messageId)
+            if (result.success) {
+              // Update contact status in Supabase
+              await updateContactStatus(campaignId, contact.phone, 'sent', result.messageId)
 
               sentCount++
-              console.log(`✅ Sent to ${contact.phone}`)
+              console.log(`✅ Sent to ${contact.phone} (msgId: ${result.messageId})`)
 
-              // Disparo para o Webhook Logger do n8n (Ponte de Registro)
-              // A URL deve ser configurada na variável de ambiente: N8N_WEBHOOK_LOGGER_URL
+              // ============================================
+              // WEBHOOK LOGGER — Ponte com n8n / CRM Flow89
+              // ============================================
               if (process.env.N8N_WEBHOOK_LOGGER_URL) {
-                const bodyText = templateComponents?.find(c => c.type === 'BODY')?.text || templateName;
                 fetch(process.env.N8N_WEBHOOK_LOGGER_URL, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     telefone: contact.phone,
-                    texto_campanha: bodyText,
-                    tipo: 'template'
+                    texto_campanha: personalizedText,
+                    tipo: 'texto_livre'
                   })
                 }).catch(() => {
                   // Catch silencioso garantindo a integridade do fluxo principal
-                });
+                })
               }
             } else {
-              // Extract error code and translate to Portuguese
-              const errorCode = data.error?.code || 0
-              const originalError = data.error?.message || 'Unknown error'
-              const translatedError = getUserFriendlyMessage(errorCode) || originalError
-              const errorWithCode = `(#${errorCode}) ${translatedError}`
-
-              // Update contact status in Turso
-              await updateContactStatus(campaignId, contact.phone, 'failed', undefined, errorWithCode)
+              // Update contact status with error
+              await updateContactStatus(campaignId, contact.phone, 'failed', undefined, result.error)
 
               failedCount++
-              console.log(`❌ Failed ${contact.phone}: ${errorWithCode}`)
+              console.log(`❌ Failed ${contact.phone}: ${result.error}`)
             }
 
-            // Small delay between messages (15ms ~ 66 msgs/sec)
-            await new Promise(resolve => setTimeout(resolve, 15))
-
           } catch (error) {
-            // Update contact status in Turso
             const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido'
             await updateContactStatus(campaignId, contact.phone, 'failed', undefined, errorMsg)
             failedCount++
@@ -287,7 +179,6 @@ export const { POST } = serve<CampaignWorkflowInput>(
         }
 
         // Update stats in Supabase (source of truth)
-        // Supabase Realtime will propagate changes to frontend
         const campaign = await campaignDb.getById(campaignId)
         if (campaign) {
           await campaignDb.updateStatus(campaignId, {

@@ -154,7 +154,7 @@ export const CampaignListView: React.FC<CampaignListViewProps> = ({
                   >
                     <td className="px-6 py-4">
                       <p className="font-medium text-white group-hover:text-primary-400 transition-colors">{campaign.name}</p>
-                      <p className="text-xs text-gray-500 mt-1 font-mono">{campaign.templateName}</p>
+                      <p className="text-xs text-gray-500 mt-1 font-mono line-clamp-1">{campaign.campaignText}</p>
                       {campaign.scheduledAt && campaign.status === CampaignStatus.SCHEDULED && (
                         <p className="text-xs text-purple-400 mt-1 flex items-center gap-1">
                           <Calendar size={10} />

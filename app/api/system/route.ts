@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { redis, isRedisAvailable } from '@/lib/redis'
-import { getWhatsAppCredentials, getCredentialsSource } from '@/lib/whatsapp-credentials'
+import { getEvoConfig, checkInstanceStatus } from '@/lib/evo-client'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 /**
@@ -22,7 +22,7 @@ interface HealthStatus {
     database: { status: 'ok' | 'error' | 'not_configured'; latency?: number; message?: string }
     redis: { status: 'ok' | 'error' | 'not_configured'; latency?: number; message?: string }
     qstash: { status: 'ok' | 'error' | 'not_configured'; message?: string }
-    whatsapp: { status: 'ok' | 'error' | 'not_configured'; source?: string; phoneNumber?: string; message?: string }
+    evolution: { status: 'ok' | 'error' | 'not_configured'; instanceName?: string; state?: string; message?: string }
   }
 }
 
@@ -58,12 +58,11 @@ interface UsageData {
     rowsWritten: number
     status: 'ok' | 'warning' | 'critical'
   }
-  whatsapp: {
+  evolution: {
     messagesSent: number
-    tier: string
-    tierLimit: number
+    instanceName: string
+    state: string
     percentage: number
-    quality: string
     status: 'ok' | 'warning' | 'critical'
   }
   qstash: {
@@ -131,7 +130,7 @@ export async function GET() {
         database: { status: 'not_configured' },
         redis: { status: 'not_configured' },
         qstash: { status: 'not_configured' },
-        whatsapp: { status: 'not_configured' },
+        evolution: { status: 'not_configured' },
       },
     },
     usage: {
@@ -151,7 +150,7 @@ export async function GET() {
       },
       redis: { commandsToday: 0, limit: 10000, percentage: 0, status: 'ok' },
       database: { plan: 'unknown', storageMB: 0, limitMB: 500, bandwidthMB: 0, bandwidthLimitMB: 5000, percentage: 0, rowsRead: 0, rowsWritten: 0, status: 'ok' },
-      whatsapp: { messagesSent: 0, tier: 'STANDARD', tierLimit: 100000, percentage: 0, quality: 'GREEN', status: 'ok' },
+      evolution: { messagesSent: 0, instanceName: '', state: 'unknown', percentage: 0, status: 'ok' },
       qstash: { messagesMonth: 0, messagesLimit: 500, percentage: 0, cost: 0, status: 'ok' },
     },
     vercel: {
@@ -326,7 +325,7 @@ export async function GET() {
           response.usage.database.percentage = Math.round((response.usage.database.storageMB / response.usage.database.limitMB) * 100 * 10) / 10
           response.usage.database.status = getStatus(response.usage.database.percentage)
 
-          // Get WhatsApp messages sent
+          // Get messages sent (last 30 days)
           const thirtyDaysAgo = new Date()
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
@@ -337,7 +336,7 @@ export async function GET() {
 
           const totalSent = campaigns?.reduce((sum: number, c: any) => sum + (c.sent || 0), 0) || 0
 
-          response.usage.whatsapp.messagesSent = totalSent
+          response.usage.evolution.messagesSent = totalSent
         } catch (error) {
           response.health.services.database = { status: 'error', message: (error as Error).message }
           response.health.overall = 'unhealthy'
@@ -488,79 +487,59 @@ export async function GET() {
       }
     })(),
 
-    // 4. WHATSAPP (Check cache first)
+    // 4. EVOLUTION API
     (async () => {
       // Try cache first
       if (redis) {
         try {
-          const cached = await redis.get('system:health:whatsapp') as any
+          const cached = await redis.get('system:health:evolution') as any
           if (cached) {
-            response.health.services.whatsapp = cached.health
-            response.usage.whatsapp = cached.usage
-            if (response.debug) response.debug.whatsapp = 'HIT'
+            response.health.services.evolution = cached.health
+            response.usage.evolution = { ...response.usage.evolution, ...cached.usage }
             return
           }
         } catch (e) { /* ignore cache errors */ }
       }
 
       try {
-        const source = await getCredentialsSource()
-        const credentials = await getWhatsAppCredentials()
+        const config = getEvoConfig()
 
-        if (credentials) {
-          const testUrl = `https://graph.facebook.com/v24.0/${credentials.phoneNumberId}?fields=display_phone_number,whatsapp_business_manager_messaging_limit,quality_score`
-          const res = await fetch(testUrl, {
-            headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
-          })
+        if (config) {
+          const status = await checkInstanceStatus(config)
 
-          if (res.ok) {
-            const data = await res.json()
-            response.health.services.whatsapp = {
+          if (status.connected) {
+            response.health.services.evolution = {
               status: 'ok',
-              source,
-              phoneNumber: data.display_phone_number,
+              instanceName: config.instanceName,
+              state: status.state,
+              message: `Conectado: ${config.instanceName} (${status.state})`,
             }
-
-            // Get tier
-            const rawTier = data.whatsapp_business_manager_messaging_limit
-            if (typeof rawTier === 'string') {
-              response.usage.whatsapp.tier = rawTier
-            } else if (rawTier && typeof rawTier === 'object') {
-              response.usage.whatsapp.tier = rawTier.current_limit || rawTier.tier || 'TIER_250'
-            }
-
-            // Get quality
-            response.usage.whatsapp.quality = data.quality_score?.score?.toUpperCase() || 'GREEN'
-
-            // Map tier to limit
-            const tierLimits: Record<string, number> = {
-              'TIER_250': 250, 'TIER_1K': 1000, 'TIER_2K': 2000,
-              'TIER_10K': 10000, 'TIER_100K': 100000, 'TIER_UNLIMITED': 1000000, 'STANDARD': 100000,
-            }
-            response.usage.whatsapp.tierLimit = tierLimits[response.usage.whatsapp.tier] || 250
           } else {
-            const error = await res.json()
-            response.health.services.whatsapp = { status: 'error', source, message: error.error?.message || 'Token invalid' }
+            response.health.services.evolution = {
+              status: 'error',
+              instanceName: config.instanceName,
+              state: status.state,
+              message: status.error || `Instância ${config.instanceName} não conectada`,
+            }
             response.health.overall = 'degraded'
           }
+
+          response.usage.evolution.instanceName = config.instanceName
+          response.usage.evolution.state = status.state || 'unknown'
         } else {
-          response.health.services.whatsapp = { status: 'not_configured', source: 'none', message: 'Not configured' }
+          response.health.services.evolution = { status: 'not_configured', message: 'EVO_API_URL/EVO_API_KEY/EVO_INSTANCE_NAME não configurados' }
         }
 
-        // Calculate WhatsApp usage percentage
-        response.usage.whatsapp.percentage = Math.round((response.usage.whatsapp.messagesSent / response.usage.whatsapp.tierLimit) * 100 * 10) / 10
-        response.usage.whatsapp.status = getStatus(response.usage.whatsapp.percentage)
-
         // Save to cache if healthy (5 minutes)
-        if (redis && response.health.services.whatsapp.status === 'ok') {
-          await redis.setex('system:health:whatsapp', 300, {
-            health: response.health.services.whatsapp,
-            usage: response.usage.whatsapp
+        if (redis && response.health.services.evolution.status === 'ok') {
+          await redis.setex('system:health:evolution', 300, {
+            health: response.health.services.evolution,
+            usage: response.usage.evolution
           })
         }
 
       } catch (error) {
-        response.health.services.whatsapp = { status: 'error', message: (error as Error).message }
+        response.health.services.evolution = { status: 'error', message: (error as Error).message }
         response.health.overall = 'degraded'
       }
     })(),

@@ -21,7 +21,7 @@ async function getSupabaseDb() {
 export type {
     Campaign,
     Contact,
-    Template,
+
     Bot,
     Flow,
     BotConversation,

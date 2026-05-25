@@ -4,16 +4,12 @@ import { useState } from 'react'
 import { useSettingsController } from '@/hooks/useSettings'
 import { SettingsView } from '@/components/features/settings/SettingsView'
 import { SetupWizardView } from '@/components/features/settings/SetupWizardView'
-import { UsagePanel } from '@/components/UsagePanel'
-import { useUsage } from '@/hooks/useUsage'
 
 export default function SettingsPage() {
   const controller = useSettingsController()
-  const { usage, isLoading: usageLoading, refetch: refetchUsage } = useUsage()
   const [skipWizard, setSkipWizard] = useState(false)
 
-  // Show Setup Wizard if infrastructure is not ready (Redis + QStash)
-  // User can skip to settings if they want to configure WhatsApp anyway
+  // Show Setup Wizard if infrastructure is not ready
   const showWizard = controller.needsSetup && !skipWizard
 
   if (showWizard) {
@@ -34,9 +30,9 @@ export default function SettingsPage() {
 
   return (
     <div>
-      {/* Header - fora do grid */}
+      {/* Header */}
       <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Configurações</h1>
-      <p className="text-gray-400 mb-10">Gerencie sua conexão com a WhatsApp Business API</p>
+      <p className="text-gray-400 mb-10">Gerencie sua conexão com a EVOlution API</p>
 
       {/* Grid responsivo: mobile=1col, xl=3col */}
       <div className="flex flex-col xl:flex-row gap-8">
@@ -50,44 +46,20 @@ export default function SettingsPage() {
             onSave={controller.onSave}
             onSaveSettings={controller.onSaveSettings}
             onDisconnect={controller.onDisconnect}
-            accountLimits={controller.accountLimits}
-            tierName={controller.tierName}
-            limitsError={controller.limitsError}
-            limitsErrorMessage={controller.limitsErrorMessage}
-            limitsLoading={controller.limitsLoading}
-            onRefreshLimits={controller.refreshLimits}
-            webhookUrl={controller.webhookUrl}
-            webhookToken={controller.webhookToken}
-            webhookStats={controller.webhookStats}
-            phoneNumbers={controller.phoneNumbers}
-            phoneNumbersLoading={controller.phoneNumbersLoading}
-            onRefreshPhoneNumbers={controller.refreshPhoneNumbers}
-            onSetWebhookOverride={controller.setWebhookOverride}
-            onRemoveWebhookOverride={controller.removeWebhookOverride}
-            availableDomains={controller.availableDomains}
-
-            webhookPath={controller.webhookPath}
+            
             // AI Settings
             aiSettings={controller.aiSettings}
             aiSettingsLoading={controller.aiSettingsLoading}
             saveAIConfig={controller.saveAIConfig}
             removeAIKey={controller.removeAIKey}
             isSavingAI={controller.isSavingAI}
+            
             // Test Contact - Supabase
             testContact={controller.testContact}
             saveTestContact={controller.saveTestContact}
             removeTestContact={controller.removeTestContact}
             isSavingTestContact={controller.isSavingTestContact}
             hideHeader
-          />
-        </div>
-
-        {/* Usage Panel - sidebar alinhado ao topo */}
-        <div className="w-full xl:w-80 flex-shrink-0">
-          <UsagePanel
-            usage={usage}
-            isLoading={usageLoading}
-            onRefresh={refetchUsage}
           />
         </div>
       </div>

@@ -12,8 +12,8 @@ export default function NewCampaignPage() {
       setStep={controller.setStep}
       name={controller.name}
       setName={controller.setName}
-      selectedTemplateId={controller.selectedTemplateId}
-      setSelectedTemplateId={controller.setSelectedTemplateId}
+      campaignText={controller.campaignText}
+      setCampaignText={controller.setCampaignText}
       recipientSource={controller.recipientSource}
       setRecipientSource={controller.setRecipientSource}
       totalContacts={controller.totalContacts}
@@ -23,27 +23,17 @@ export default function NewCampaignPage() {
       selectedContactIds={controller.selectedContactIds}
       setSelectedContactIds={controller.setSelectedContactIds}
       toggleContact={controller.toggleContact}
-      availableTemplates={controller.availableTemplates}
-      selectedTemplate={controller.selectedTemplate}
       handleNext={controller.handleNext}
       handleBack={controller.handleBack}
       handleSend={controller.handleSend}
       isCreating={controller.isCreating}
       isLoading={controller.isLoading}
       testContact={controller.testContact}
-      // Template Variables
-      templateVariables={controller.templateVariables}
-      setTemplateVariables={controller.setTemplateVariables}
-      templateVariableCount={controller.templateVariableCount}
-      templateVariableInfo={controller.templateVariableInfo}
-      // Account Limits
-      accountLimits={controller.accountLimits}
-      isBlockModalOpen={controller.isBlockModalOpen}
-      setIsBlockModalOpen={controller.setIsBlockModalOpen}
-      blockReason={controller.blockReason}
-      liveValidation={controller.liveValidation}
-      isOverLimit={controller.isOverLimit}
-      currentLimit={controller.currentLimit}
+      scheduledAt={controller.scheduledAt}
+      setScheduledAt={controller.setScheduledAt}
+      isScheduling={controller.isScheduling}
+      setIsScheduling={controller.setIsScheduling}
+      handleSchedule={controller.handleSchedule}
     />
   )
 }

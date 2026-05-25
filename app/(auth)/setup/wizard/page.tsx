@@ -40,10 +40,10 @@ interface WizardData {
   upstashApiKey: string
   upstashConsoleUrl: string
 
-  // Step 4: WhatsApp
-  whatsappToken: string
-  whatsappPhoneId: string
-  whatsappBusinessId: string
+  // Step 4: EVOlution API
+  evoApiUrl: string
+  evoApiKey: string
+  evoInstanceName: string
 
   // Step 5: Company
   companyName: string
@@ -63,9 +63,9 @@ const initialData: WizardData = {
   upstashEmail: '',
   upstashApiKey: '',
   upstashConsoleUrl: '',
-  whatsappToken: '',
-  whatsappPhoneId: '',
-  whatsappBusinessId: '',
+  evoApiUrl: '',
+  evoApiKey: '',
+  evoInstanceName: '',
   companyName: '',
   email: '',
   phone: '',
@@ -183,9 +183,9 @@ function WizardContent() {
           UPSTASH_REDIS_REST_URL: 'redisUrl',
           UPSTASH_REDIS_REST_TOKEN: 'redisToken',
           QSTASH_TOKEN: 'qstashToken',
-          WHATSAPP_TOKEN: 'whatsappToken',
-          WHATSAPP_PHONE_ID: 'whatsappPhoneId',
-          WHATSAPP_BUSINESS_ACCOUNT_ID: 'whatsappBusinessId',
+          EVO_API_URL: 'evoApiUrl',
+          EVO_API_KEY: 'evoApiKey',
+          EVO_INSTANCE_NAME: 'evoInstanceName',
           // Add others if needed
         }
 
@@ -279,12 +279,12 @@ function WizardContent() {
           type = 'redis'
           credentials = { url: data.redisUrl, token: data.redisToken }
           break
-        case 4: // WhatsApp
-          type = 'whatsapp'
+        case 4: // EVOlution
+          type = 'evolution'
           credentials = {
-            token: data.whatsappToken,
-            phoneId: data.whatsappPhoneId,
-            businessId: data.whatsappBusinessId
+            url: data.evoApiUrl,
+            key: data.evoApiKey,
+            instance: data.evoInstanceName
           }
           break
         default:
@@ -368,16 +368,16 @@ function WizardContent() {
         }
         break
       case 4:
-        if (!data.whatsappToken) {
-          setError('Token do WhatsApp é obrigatório')
+        if (!data.evoApiUrl) {
+          setError('URL da API é obrigatória')
           return false
         }
-        if (!data.whatsappPhoneId) {
-          setError('Phone Number ID é obrigatório')
+        if (!data.evoApiKey) {
+          setError('API Key é obrigatória')
           return false
         }
-        if (!data.whatsappBusinessId) {
-          setError('Business Account ID é obrigatório')
+        if (!data.evoInstanceName) {
+          setError('Nome da Instância é obrigatório')
           return false
         }
         break
@@ -585,9 +585,9 @@ function WizardContent() {
             UPSTASH_EMAIL: data.upstashEmail,
             UPSTASH_API_KEY: data.upstashApiKey,
             UPSTASH_CONSOLE_URL: data.upstashConsoleUrl,
-            WHATSAPP_TOKEN: data.whatsappToken,
-            WHATSAPP_PHONE_ID: data.whatsappPhoneId,
-            WHATSAPP_BUSINESS_ACCOUNT_ID: data.whatsappBusinessId,
+            EVO_API_URL: data.evoApiUrl,
+            EVO_API_KEY: data.evoApiKey,
+            EVO_INSTANCE_NAME: data.evoInstanceName,
             // Setup metadata for future resume mode
             SETUP_COMPLETE: 'true',
             VERCEL_PROJECT_ID: projectInfo.id,
@@ -1021,56 +1021,47 @@ function WizardContent() {
             </>
           )}
 
-          {/* Step 4: WhatsApp */}
+          {/* Step 4: EVOlution API */}
           {step === 4 && (
             <>
               <h2 className="text-lg font-semibold text-white mb-1">
-                WhatsApp Cloud API
+                EVOlution API
               </h2>
               <p className="text-zinc-400 text-sm mb-4">
-                Configure a integração com WhatsApp
+                Configure a integração com sua instância EVOlution
               </p>
-
-              <a
-                href="https://developers.facebook.com/apps"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-emerald-500 text-sm hover:underline mb-6"
-              >
-                Meta for Developers <ExternalLink className="w-3 h-3" />
-              </a>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Phone Number ID</label>
+                  <label className="block text-sm text-zinc-400 mb-1">URL da API</label>
                   <input
-                    type="text"
-                    value={data.whatsappPhoneId}
-                    onChange={(e) => updateField('whatsappPhoneId', e.target.value)}
-                    placeholder="1234567890"
+                    type="url"
+                    value={data.evoApiUrl}
+                    onChange={(e) => updateField('evoApiUrl', e.target.value)}
+                    placeholder="https://sua-api.com"
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm"
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Business Account ID</label>
+                  <label className="block text-sm text-zinc-400 mb-1">API Key Global ou da Instância</label>
                   <input
-                    type="text"
-                    value={data.whatsappBusinessId}
-                    onChange={(e) => updateField('whatsappBusinessId', e.target.value)}
-                    placeholder="1234567890"
+                    type="password"
+                    value={data.evoApiKey}
+                    onChange={(e) => updateField('evoApiKey', e.target.value)}
+                    placeholder="Sua API Key"
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Access Token</label>
+                  <label className="block text-sm text-zinc-400 mb-1">Nome da Instância</label>
                   <input
-                    type="password"
-                    value={data.whatsappToken}
-                    onChange={(e) => updateField('whatsappToken', e.target.value)}
-                    placeholder="EAA..."
+                    type="text"
+                    value={data.evoInstanceName}
+                    onChange={(e) => updateField('evoInstanceName', e.target.value)}
+                    placeholder="Ex: smartzap"
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-mono text-sm"
                   />
                 </div>

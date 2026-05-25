@@ -51,7 +51,7 @@ export const CreateCampaignSchema = z.object({
   name: z.string()
     .min(1, 'Nome é obrigatório')
     .max(100, 'Nome muito longo'),
-  templateName: z.string().min(1, 'Template é obrigatório'),
+  campaignText: z.string().min(1, 'Texto da campanha é obrigatório'),
   recipients: z.number().int().min(0).optional().default(0),
   scheduledAt: z.string().datetime().optional(),
   selectedContactIds: z.array(z.string()).optional(),
@@ -67,7 +67,7 @@ export const CreateCampaignSchema = z.object({
 export const UpdateCampaignSchema = z.object({
   name: z.string().max(100).optional(),
   status: z.nativeEnum(CampaignStatus).optional(),
-  templateName: z.string().optional(),
+  campaignText: z.string().optional(),
   scheduledAt: z.string().datetime().optional().nullable(),
   sent: z.number().int().min(0).optional(),
   delivered: z.number().int().min(0).optional(),
@@ -81,7 +81,7 @@ export const UpdateCampaignSchema = z.object({
 
 export const DispatchCampaignSchema = z.object({
   campaignId: z.string().uuid('ID de campanha inválido'),
-  templateName: z.string().min(1, 'Nome do template é obrigatório'),
+  campaignText: z.string().min(1, 'Texto da campanha é obrigatório'),
   contacts: z.array(
     z.object({
       phone: z.string().min(1),
@@ -96,9 +96,9 @@ export const DispatchCampaignSchema = z.object({
 // ============================================================================
 
 export const SaveCredentialsSchema = z.object({
-  phoneNumberId: z.string().min(1, 'Phone Number ID é obrigatório'),
-  businessAccountId: z.string().min(1, 'Business Account ID é obrigatório'),
-  accessToken: z.string().min(1, 'Access Token é obrigatório'),
+  evoApiUrl: z.string().url('URL inválida').min(1, 'URL da API é obrigatória'),
+  evoApiKey: z.string().min(1, 'API Key é obrigatória'),
+  evoInstanceName: z.string().min(1, 'Nome da Instância é obrigatório'),
   displayPhoneNumber: z.string().optional(),
   verifiedName: z.string().optional(),
 })

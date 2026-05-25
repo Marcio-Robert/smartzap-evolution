@@ -110,7 +110,7 @@ export const useCampaignsController = (initialData?: Campaign[]) => {
     return campaigns.filter(c => {
       const matchesFilter = filter === 'All' || c.status === filter;
       const matchesSearch = (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.templateName || '').toLowerCase().includes(searchTerm.toLowerCase());
+        (c.campaignText || '').toLowerCase().includes(searchTerm.toLowerCase());
       return matchesFilter && matchesSearch;
     });
   }, [campaigns, filter, searchTerm]);
