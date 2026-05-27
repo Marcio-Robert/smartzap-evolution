@@ -1,31 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { getEvoConfig, checkInstanceStatus } from '@/lib/evo-client'
 
-export async function POST(request: NextRequest) {
-  const { phoneNumberId, accessToken } = await request.json()
-
-  if (!phoneNumberId || !accessToken) {
-    return NextResponse.json({ error: 'Missing credentials' }, { status: 400 })
-  }
-
+/**
+ * API Route: Phone/Instance Status
+ *
+ * Returns the connection status of the EVOlution instance.
+ * Replaces the old Meta Graph API phone-number lookup.
+ */
+export async function GET() {
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/v24.0/${phoneNumberId}?fields=display_phone_number,quality_rating,verified_name`,
-      {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      }
-    )
+    const config = getEvoConfig()
 
-    const data = await response.json()
-    
-    if (!response.ok) {
-      console.error('Meta API Error (phone-number):', JSON.stringify(data, null, 2))
-      const errorMessage = data.error?.message || 'Failed to fetch phone details'
-      return NextResponse.json({ error: errorMessage }, { status: response.status })
+    if (!config) {
+      return NextResponse.json(
+        { error: 'EVOlution API não configurada' },
+        { status: 400 }
+      )
     }
 
-    return NextResponse.json(data)
+    const status = await checkInstanceStatus(config)
+
+    return NextResponse.json({
+      instanceName: config.instanceName,
+      state: status.state || 'unknown',
+      connected: status.connected,
+    })
   } catch (error) {
-    console.error('Meta API Error (phone-number):', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.error('EVO instance status error:', error)
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
   }
 }

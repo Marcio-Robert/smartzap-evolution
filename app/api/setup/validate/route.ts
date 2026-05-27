@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { type, credentials } = body as {
-      type: 'database' | 'redis' | 'qstash' | 'whatsapp'
+      type: 'database' | 'redis' | 'qstash' | 'evolution'
       credentials: Record<string, string>
     }
 
@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
         return await validateRedis(credentials)
       case 'qstash':
         return await validateQStash(credentials)
-      case 'whatsapp':
-        return await validateWhatsApp(credentials)
+      case 'evolution':
+        return await validateEvolution(credentials)
       default:
         return NextResponse.json(
           { error: 'Tipo de validação inválido' },
@@ -193,48 +193,64 @@ async function validateQStash(credentials: Record<string, string>) {
   }
 }
 
-async function validateWhatsApp(credentials: Record<string, string>) {
-  const token = cleanCredential(credentials.token)
-  const phoneId = cleanCredential(credentials.phoneId)
-  const businessId = cleanCredential(credentials.businessId)
+async function validateEvolution(credentials: Record<string, string>) {
+  const url = cleanCredential(credentials.url)
+  const key = cleanCredential(credentials.key)
+  const instance = cleanCredential(credentials.instance)
 
-  if (!token || !phoneId || !businessId) {
+  if (!url || !key || !instance) {
     return NextResponse.json(
-      { valid: false, error: 'Todos os campos são obrigatórios' },
+      { valid: false, error: 'URL, API Key e Nome da Instância são obrigatórios' },
       { status: 400 }
     )
   }
 
   try {
-    // Test WhatsApp by getting phone number info
+    // Test EVOlution API by checking instance connection state
     const response = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneId}`,
+      `${url.replace(/\/+$/, '')}/instance/connectionState/${instance}`,
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'apikey': key,
         },
       }
     )
 
     if (!response.ok) {
-      const error = await response.json()
+      if (response.status === 401 || response.status === 403) {
+        return NextResponse.json({
+          valid: false,
+          error: 'API Key inválida. Verifique a chave global ou de instância.'
+        })
+      }
+      if (response.status === 404) {
+        return NextResponse.json({
+          valid: false,
+          error: `Instância "${instance}" não encontrada. Verifique o nome.`
+        })
+      }
       return NextResponse.json({
         valid: false,
-        error: error.error?.message || 'Token ou Phone ID inválido'
+        error: `Erro de conexão com EVOlution API (${response.status})`
       })
     }
 
     const data = await response.json()
+    const state = data?.instance?.state || data?.state || 'unknown'
+    const connected = state === 'open'
 
     return NextResponse.json({
       valid: true,
-      message: `WhatsApp OK! (${data.verified_name || data.display_phone_number || 'Conectado'})`
+      message: connected
+        ? `EVOlution OK! Instância "${instance}" conectada.`
+        : `Instância encontrada (estado: ${state}). Verifique se o QR Code foi escaneado.`
     })
   } catch (error) {
-    console.error('WhatsApp validation error:', error)
+    console.error('EVOlution validation error:', error)
     return NextResponse.json({
       valid: false,
-      error: 'Não foi possível conectar ao WhatsApp'
+      error: 'Não foi possível conectar à EVOlution API (verifique a URL)'
     })
   }
 }
+

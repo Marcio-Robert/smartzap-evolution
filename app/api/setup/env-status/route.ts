@@ -25,10 +25,10 @@ export async function GET() {
         redisToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
         qstashToken: !!process.env.QSTASH_TOKEN,
 
-        // WhatsApp
-        whatsappToken: !!process.env.WHATSAPP_TOKEN,
-        whatsappPhoneId: !!process.env.WHATSAPP_PHONE_ID,
-        whatsappBusinessId: !!process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+        // EVOlution API
+        evoApiUrl: !!process.env.EVO_API_URL,
+        evoApiKey: !!process.env.EVO_API_KEY,
+        evoInstanceName: !!process.env.EVO_INSTANCE_NAME,
     }
 
     // Calculate which steps are complete
@@ -36,11 +36,11 @@ export async function GET() {
         password: status.masterPassword,
         database: status.supabaseUrl && status.supabaseAnonKey && status.supabaseServiceKey,
         redis: status.redisUrl && status.redisToken && status.qstashToken,
-        whatsapp: status.whatsappToken && status.whatsappPhoneId && status.whatsappBusinessId,
+        evolution: status.evoApiUrl && status.evoApiKey && status.evoInstanceName,
     }
 
     // All infra is configured, only company info might be missing
-    const allConfigured = steps.password && steps.database && steps.redis && steps.whatsapp
+    const allConfigured = steps.password && steps.database && steps.redis && steps.evolution
 
     // Check if we can use server-side Vercel token for resume operations
     const hasVercelToken = !!process.env.VERCEL_TOKEN
@@ -55,6 +55,6 @@ export async function GET() {
             !steps.password ? 1 :
                 !steps.database ? 2 :
                     !steps.redis ? 3 :
-                        !steps.whatsapp ? 4 : 5
+                        !steps.evolution ? 4 : 5
     })
 }
