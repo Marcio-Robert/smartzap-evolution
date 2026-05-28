@@ -204,7 +204,7 @@ export const useCampaignWizardController = () => {
     isLoading: contactsQuery.isLoading || testContactQuery.isLoading,
 
     // Test Contact
-    testContact,
+    testContact: testContact || undefined,
 
     // Scheduling
     scheduledAt,
