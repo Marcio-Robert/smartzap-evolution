@@ -712,9 +712,9 @@ export function DashboardShell({
                 </header>
 
                 {/* Page Content */}
-                <main className={`flex-1 flex flex-col min-h-0 ${pathname?.includes('/campaigns/new')
-                    ? 'overflow-hidden'
-                    : 'overflow-auto p-6 lg:p-10'
+                <main className={`flex-1 flex flex-col min-h-0 overflow-auto ${pathname?.includes('/campaigns/new')
+                    ? ''
+                    : 'p-6 lg:p-10'
                     }`}>
                     <div className={
                         pathname?.includes('/campaigns/new')

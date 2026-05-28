@@ -28,12 +28,12 @@ export const useCampaignWizardController = () => {
   });
 
   // Get settings for test contact
-  const settingsQuery = useQuery({
-    queryKey: ['settings'],
-    queryFn: settingsService.get,
+  const testContactQuery = useQuery({
+    queryKey: ['testContact'],
+    queryFn: settingsService.getTestContact,
   });
 
-  const testContact = settingsQuery.data?.testContact;
+  const testContact = testContactQuery.data;
 
   // Initialize name
   useEffect(() => {
@@ -201,7 +201,7 @@ export const useCampaignWizardController = () => {
     handleBack,
     handleSend,
     isCreating: createCampaignMutation.isPending,
-    isLoading: contactsQuery.isLoading || settingsQuery.isLoading,
+    isLoading: contactsQuery.isLoading || testContactQuery.isLoading,
 
     // Test Contact
     testContact,

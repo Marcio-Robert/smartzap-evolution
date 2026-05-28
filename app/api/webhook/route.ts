@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
 
 /**
  * Webhook Endpoint — SmartZap EVO
  *
- * Simplified webhook handler. The Meta webhook verification (GET)
- * and status tracking (delivered/read/failed) have been removed
- * since we no longer use the Meta Cloud API.
- *
- * This endpoint is kept as a stub for future EVOlution API webhook
- * integration if needed (e.g., message status callbacks from EVO).
+ * Processa webhooks da EVOlution API.
  */
 
-// GET - Stub (no Meta verification needed)
+// GET - Verificação
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
@@ -21,16 +17,58 @@ export async function GET() {
 }
 
 // POST - Receive incoming webhook events
-// Can be configured in EVOlution API to receive message status updates
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-
     console.log('📨 EVO Webhook received:', JSON.stringify(body).substring(0, 500))
 
-    // TODO: Process EVOlution API webhook events here
-    // Example events: message status updates, incoming messages, etc.
-    // For now, just acknowledge receipt.
+    if (body.event === 'messages.update' && Array.isArray(body.data)) {
+      for (const item of body.data) {
+        const messageId = item.key?.id
+        const updateStatus = item.update?.status
+
+        if (!messageId || !updateStatus) continue
+
+        let newStatus = ''
+        let timestampField = ''
+
+        if (updateStatus === 'DELIVERY_ACK') {
+          newStatus = 'delivered'
+          timestampField = 'delivered_at'
+        } else if (updateStatus === 'READ' || updateStatus === 'PLAYED') {
+          newStatus = 'read'
+          timestampField = 'read_at'
+        } else if (updateStatus === 'ERROR') {
+          newStatus = 'failed'
+          timestampField = 'failed_at'
+        }
+
+        if (newStatus) {
+          // Atualiza status do contato
+          const { data: contactData } = await supabase
+            .from('campaign_contacts')
+            .update({
+              status: newStatus,
+              [timestampField]: new Date().toISOString()
+            })
+            .eq('message_id', messageId)
+            .select('campaign_id')
+            .single()
+
+          // Atualiza contadores da campanha
+          if (contactData?.campaign_id) {
+            const campaignId = contactData.campaign_id
+            if (newStatus === 'delivered') {
+              await supabase.rpc('increment_campaign_stat', { cid: campaignId, stat_col: 'delivered' })
+            } else if (newStatus === 'read') {
+              await supabase.rpc('increment_campaign_stat', { cid: campaignId, stat_col: 'read' })
+            } else if (newStatus === 'failed') {
+              await supabase.rpc('increment_campaign_stat', { cid: campaignId, stat_col: 'failed' })
+            }
+          }
+        }
+      }
+    }
 
     return NextResponse.json({ status: 'ok' })
 
