@@ -4,17 +4,35 @@ import { supabase } from '@/lib/supabase'
 /**
  * Webhook Endpoint — SmartZap EVO
  *
- * Recebe webhooks da EVOlution API para atualizar status das mensagens
- * enviadas pelas campanhas (delivered, read, failed).
+ * Recebe webhooks da EVOlution API (via n8n) para atualizar status das
+ * mensagens enviadas pelas campanhas (delivered, read, failed).
  *
- * A Evolution API envia o evento `messages.update` com status NUMÉRICO:
- *   2 → ERROR (falha)
- *   3 → DELIVERY_ACK (enviado/servidor recebeu)
- *   4 → DELIVERED (entregue ao destinatário)
- *   5 → READ (lido)
+ * ─── Payload Real da Evolution API (v2) ───
  *
- * Também aceita o formato string legado (DELIVERY_ACK, READ, etc.)
- * para compatibilidade com versões anteriores ou outros providers.
+ * {
+ *   "event": "messages.update",
+ *   "instance": "Lais_Melo_1",
+ *   "data": {
+ *     "keyId": "3EB017363CD9B439D2A1A4",      ← ID da mensagem (salvo em campaign_contacts.message_id)
+ *     "remoteJid": "55899...@s.whatsapp.net",
+ *     "fromMe": true,
+ *     "status": "DELIVERY_ACK",                 ← Status como STRING
+ *     "instanceId": "e3a06817-...",
+ *     "messageId": "cmprtuww400l8p24q88drsvyr"   ← ID interno da Evolution (não usado)
+ *   }
+ * }
+ *
+ * ─── Mapeamento de Status ───
+ *
+ *   SERVER_ACK   → ignorado (servidor recebeu, já marcado como 'sent' no disparo)
+ *   DELIVERY_ACK → delivered (entregue ao destinatário)
+ *   READ         → read (lido)
+ *   PLAYED       → read (áudio/vídeo reproduzido)
+ *   ERROR        → failed
+ *   FAILED       → failed
+ *
+ * Também aceita status numérico (2=error, 3=sent, 4=delivered, 5=read)
+ * para compatibilidade com outras versões da Evolution API.
  */
 
 // =============================================================================
@@ -28,10 +46,26 @@ interface StatusMapping {
 }
 
 /**
- * Mapeia o status da Evolution API (numérico ou string) para o formato interno.
+ * Mapeia o status da Evolution API para o formato interno.
+ * Aceita tanto strings (DELIVERY_ACK, READ, etc.) quanto números (3, 4, 5).
  */
 function mapEvoStatus(rawStatus: unknown): StatusMapping | null {
-  // Evolution API v2 envia números
+  // Formato STRING — payload real da Evolution API v2
+  if (typeof rawStatus === 'string') {
+    const stringMap: Record<string, StatusMapping> = {
+      // Status que atualizamos no banco:
+      'DELIVERY_ACK': { newStatus: 'delivered', timestampField: 'delivered_at', counterField: 'delivered' },
+      'READ':         { newStatus: 'read',      timestampField: 'read_at',      counterField: 'read' },
+      'PLAYED':       { newStatus: 'read',      timestampField: 'read_at',      counterField: 'read' },
+      'ERROR':        { newStatus: 'failed',    timestampField: 'failed_at',    counterField: 'failed' },
+      'FAILED':       { newStatus: 'failed',    timestampField: 'failed_at',    counterField: 'failed' },
+      // Status que IGNORAMOS (já tratado no disparo):
+      'SERVER_ACK':   { newStatus: 'sent',      timestampField: 'sent_at',      counterField: 'sent' },
+    }
+    return stringMap[rawStatus.toUpperCase()] ?? null
+  }
+
+  // Formato NUMÉRICO — compatibilidade com versões alternativas
   if (typeof rawStatus === 'number') {
     const numericMap: Record<number, StatusMapping> = {
       2: { newStatus: 'failed',    timestampField: 'failed_at',    counterField: 'failed' },
@@ -42,16 +76,52 @@ function mapEvoStatus(rawStatus: unknown): StatusMapping | null {
     return numericMap[rawStatus] ?? null
   }
 
-  // Formato string legado (Z-API / Meta Cloud API / algumas versões Evolution)
-  if (typeof rawStatus === 'string') {
-    const stringMap: Record<string, StatusMapping> = {
-      'DELIVERY_ACK': { newStatus: 'delivered', timestampField: 'delivered_at', counterField: 'delivered' },
-      'READ':         { newStatus: 'read',      timestampField: 'read_at',      counterField: 'read' },
-      'PLAYED':       { newStatus: 'read',      timestampField: 'read_at',      counterField: 'read' },
-      'ERROR':        { newStatus: 'failed',    timestampField: 'failed_at',    counterField: 'failed' },
-      'FAILED':       { newStatus: 'failed',    timestampField: 'failed_at',    counterField: 'failed' },
-    }
-    return stringMap[rawStatus.toUpperCase()] ?? null
+  return null
+}
+
+/**
+ * Extrai o message ID do item de update.
+ * A Evolution API usa diferentes estruturas dependendo da versão:
+ *   - v2 real:  data.keyId (string plana)
+ *   - v2 docs:  data.key.id (objeto aninhado)
+ *   - fallback: data.id
+ */
+function extractMessageId(item: Record<string, unknown>): string | null {
+  // Formato real da Evolution API v2 — data.keyId
+  if (typeof item.keyId === 'string' && item.keyId) {
+    return item.keyId
+  }
+
+  // Formato documentação — data.key.id
+  const key = item.key as Record<string, unknown> | undefined
+  if (key && typeof key.id === 'string' && key.id) {
+    return key.id
+  }
+
+  // Fallback genérico
+  if (typeof item.id === 'string' && item.id) {
+    return item.id
+  }
+
+  return null
+}
+
+/**
+ * Extrai o status do item de update.
+ * Tenta múltiplos caminhos no objeto:
+ *   - data.status (formato real)
+ *   - data.update.status (formato documentação)
+ */
+function extractStatus(item: Record<string, unknown>): unknown {
+  // Formato real — data.status (string direta)
+  if (item.status !== undefined && item.status !== null) {
+    return item.status
+  }
+
+  // Formato documentação — data.update.status
+  const update = item.update as Record<string, unknown> | undefined
+  if (update && update.status !== undefined && update.status !== null) {
+    return update.status
   }
 
   return null
@@ -70,49 +140,56 @@ export async function GET() {
   })
 }
 
-// POST - Recebe eventos de status da Evolution API
+// POST - Recebe eventos de status da Evolution API (via n8n)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    console.log('📨 EVO Webhook received:', JSON.stringify(body).substring(0, 500))
+    console.log('📨 EVO Webhook received:', JSON.stringify(body).substring(0, 800))
 
     // =========================================================================
     // Evento: messages.update — Atualização de status de mensagem
     // =========================================================================
     if (body.event === 'messages.update') {
-      // A Evolution API pode enviar os dados como array ou objeto único
-      const updates = Array.isArray(body.data) ? body.data : [body.data]
+      // A Evolution API pode enviar `data` como objeto plano ou array
+      const items: Record<string, unknown>[] = Array.isArray(body.data)
+        ? body.data
+        : (body.data ? [body.data] : [])
 
-      for (const item of updates) {
+      let processedCount = 0
+
+      for (const item of items) {
         if (!item) continue
 
-        const messageId = item.key?.id
-        const rawStatus = item.update?.status ?? item.status
-
+        // ─── Extrair messageId ───
+        const messageId = extractMessageId(item)
         if (!messageId) {
-          console.log('⚠️ Webhook item sem message_id, ignorando')
+          console.log('⚠️ Webhook item sem message_id, ignorando. Keys:', Object.keys(item).join(', '))
           continue
         }
 
-        if (rawStatus === undefined || rawStatus === null) {
-          console.log(`⚠️ Webhook item sem status para messageId: ${messageId}`)
+        // ─── Extrair status ───
+        const rawStatus = extractStatus(item)
+        if (rawStatus === null) {
+          console.log(`⚠️ Webhook item sem status para keyId: ${messageId}. Keys:`, Object.keys(item).join(', '))
           continue
         }
 
+        // ─── Mapear status ───
         const mapping = mapEvoStatus(rawStatus)
         if (!mapping) {
-          console.log(`⚠️ Status não mapeado: ${rawStatus} (tipo: ${typeof rawStatus}) para messageId: ${messageId}`)
+          console.log(`⚠️ Status não mapeado: "${rawStatus}" (tipo: ${typeof rawStatus}) para keyId: ${messageId}`)
           continue
         }
 
-        // Ignora status 'sent' (3) — o workflow já marca como sent no momento do envio
+        // Ignora SERVER_ACK / sent (3) — o workflow já marca como sent no momento do envio
         if (mapping.newStatus === 'sent') {
+          console.log(`⏭️ Ignorando SERVER_ACK para keyId: ${messageId} (já marcado como sent)`)
           continue
         }
 
-        console.log(`📬 Status update: messageId=${messageId} → ${mapping.newStatus} (raw: ${rawStatus})`)
+        console.log(`📬 Status update: keyId=${messageId} → ${mapping.newStatus} (raw: ${rawStatus})`)
 
-        // Atualiza o status do contato na campaign_contacts
+        // ─── Atualizar campaign_contacts ───
         const { data: contactData, error: updateError } = await supabase
           .from('campaign_contacts')
           .update({
@@ -123,20 +200,20 @@ export async function POST(request: NextRequest) {
           .select('campaign_id')
 
         if (updateError) {
-          console.error(`❌ Erro ao atualizar campaign_contacts para messageId ${messageId}:`, updateError)
+          console.error(`❌ Erro ao atualizar campaign_contacts para keyId ${messageId}:`, updateError)
           continue
         }
 
         if (!contactData || contactData.length === 0) {
-          // Mensagem não encontrada — pode ser de outra fonte (chatbot, mensagem manual)
-          console.log(`ℹ️ messageId ${messageId} não encontrado em campaign_contacts (pode ser mensagem fora de campanha)`)
+          console.log(`ℹ️ keyId ${messageId} não encontrado em campaign_contacts (pode ser mensagem fora de campanha)`)
           continue
         }
 
-        // Atualiza o contador da campanha diretamente
+        processedCount++
+
+        // ─── Atualizar contador da campanha ───
         const campaignId = contactData[0].campaign_id
         if (campaignId) {
-          // Busca valores atuais e incrementa o campo correspondente
           const { data: campaign } = await supabase
             .from('campaigns')
             .select('delivered, read, failed')
@@ -161,6 +238,8 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+
+      console.log(`✅ Webhook processado: ${processedCount} status atualizados`)
     }
 
     return NextResponse.json({ status: 'ok' })
